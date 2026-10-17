@@ -16,8 +16,30 @@ const _mutedInk = Color(0xFF748078);
 const _green = Color(0xFF2E7652);
 const _line = Color(0xFFE5EAE4);
 const _page = Color(0xFFF6F8F5);
-const _dayWidth = 66.0;
 const _rowHeight = 78.0;
+
+double _objectColumnWidthForScreen(double screenWidth) {
+  if (screenWidth < 520) return 45;
+  if (screenWidth < 760) return 60;
+  if (screenWidth < 1200) return 77;
+  return 90;
+}
+
+double _dayWidthForScreen(double screenWidth) {
+  final horizontalPadding = screenWidth < 520 ? 16.0 : 36.0;
+  final objectColumnWidth = _objectColumnWidthForScreen(screenWidth);
+  final availableWidth =
+      screenWidth - horizontalPadding - objectColumnWidth - 2;
+  final preferredWidth = screenWidth < 520
+      ? 44.0
+      : screenWidth < 800
+      ? 46.0
+      : screenWidth < 1200
+      ? 48.0
+      : 52.0;
+
+  return (availableWidth / 9).clamp(1.0, preferredWidth).toDouble();
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,6 +143,8 @@ class _CalendarPageState extends State<CalendarPage> {
   bool _syncingScroll = false;
   bool _initialScrollQueued = false;
   bool _rangeAdjustmentPending = false;
+
+  double get _dayWidth => _dayWidthForScreen(MediaQuery.sizeOf(context).width);
 
   @override
   void initState() {
@@ -651,7 +675,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Widget _buildCalendar(double screenWidth) {
-    final leftWidth = screenWidth >= 760 ? 198.0 : 142.0;
+    final leftWidth = _objectColumnWidthForScreen(screenWidth);
     final dates = _dates;
 
     return Padding(
@@ -705,7 +729,7 @@ class _CalendarPageState extends State<CalendarPage> {
                       itemExtent: _rowHeight,
                       itemCount: _units.length,
                       itemBuilder: (context, index) =>
-                          _buildUnitLabel(_units[index], index),
+                          _buildUnitLabel(_units[index]),
                     ),
                   ),
                 ),
@@ -759,53 +783,24 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  Widget _buildUnitLabel(RentalUnit unit, int index) {
-    final initials = unit.name.trim().isEmpty
-        ? '•'
-        : unit.name.trim().characters.first.toUpperCase();
+  Widget _buildUnitLabel(RentalUnit unit) {
     return Container(
       height: _rowHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 7),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: _line)),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 31,
-            height: 31,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: index.isEven
-                  ? const Color(0xFFE9F2EB)
-                  : const Color(0xFFF1EEE6),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              initials,
-              maxLines: 1,
-              style: const TextStyle(
-                color: _green,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              unit.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _ink,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                height: 1.2,
-              ),
-            ),
-          ),
-        ],
+      alignment: Alignment.centerLeft,
+      child: Text(
+        unit.name,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: _ink,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          height: 1.2,
+        ),
       ),
     );
   }
@@ -905,6 +900,15 @@ class _CalendarPageState extends State<CalendarPage> {
           final left = startIndex * _dayWidth + 3;
           final width = visibleDays * _dayWidth - 6;
           final palette = _statusPalette(booking.status);
+          final compactCard = width < 38;
+          final cardName = booking.clientName.isEmpty
+              ? 'Б'
+              : compactCard
+              ? booking.clientName.characters.first
+              : booking.clientName;
+          final cardSummary = compactCard
+              ? '${booking.nights}н·${booking.guests + booking.children}ч'
+              : '${booking.nights}н · ${booking.guests + booking.children}ч';
 
           return Positioned(
             left: left,
@@ -918,9 +922,13 @@ class _CalendarPageState extends State<CalendarPage> {
                 borderRadius: BorderRadius.circular(10),
                 onTap: () => _editBooking(booking),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 6,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: width < 38
+                        ? 1
+                        : width < 60
+                        ? 3
+                        : 7,
+                    vertical: width < 38 ? 2 : 6,
                   ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
@@ -939,23 +947,22 @@ class _CalendarPageState extends State<CalendarPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              booking.clientName.isEmpty
-                                  ? 'Бронь'
-                                  : booking.clientName,
+                              cardName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: palette.foreground,
-                                fontSize: 9,
+                                fontSize: compactCard ? 7 : 9,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
                             Text(
-                              '${booking.nights}н · ${booking.guests + booking.children}ч',
+                              cardSummary,
                               maxLines: 1,
+                              overflow: TextOverflow.clip,
                               style: TextStyle(
                                 color: palette.foreground,
-                                fontSize: 9,
+                                fontSize: compactCard ? 7 : 9,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
