@@ -102,7 +102,12 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
+  static const _monthsInWindow = 6;
+  static const _monthsPerShift = 3;
+  static const _edgeBufferDays = 30;
+
   late DateTime _month;
+  late DateTime _rangeStartMonth;
   late final ScrollController _leftScrollController;
   late final ScrollController _rightScrollController;
   late final ScrollController _horizontalController;
@@ -115,15 +120,18 @@ class _CalendarPageState extends State<CalendarPage> {
   bool _loading = true;
   bool _syncingScroll = false;
   bool _initialScrollQueued = false;
+  bool _rangeAdjustmentPending = false;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _month = DateTime.utc(now.year, now.month);
+    _rangeStartMonth = DateTime.utc(now.year, now.month - 3);
     _leftScrollController = ScrollController()..addListener(_syncLeftToRight);
     _rightScrollController = ScrollController()..addListener(_syncRightToLeft);
-    _horizontalController = ScrollController();
+    _horizontalController = ScrollController()
+      ..addListener(_handleTimelineScroll);
 
     _unitsSubscription = widget.useCases.watchRentalUnits().listen(
       (units) {
@@ -156,7 +164,9 @@ class _CalendarPageState extends State<CalendarPage> {
     _rightScrollController
       ..removeListener(_syncRightToLeft)
       ..dispose();
-    _horizontalController.dispose();
+    _horizontalController
+      ..removeListener(_handleTimelineScroll)
+      ..dispose();
     super.dispose();
   }
 
@@ -177,27 +187,50 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   List<DateTime> get _dates {
-    final count = DateTime.utc(
-      _month.year,
-      _month.month + 1,
-    ).difference(_month).inDays;
-    return List.generate(count, (index) => _month.add(Duration(days: index)));
+    final rangeEnd = DateTime.utc(
+      _rangeStartMonth.year,
+      _rangeStartMonth.month + _monthsInWindow,
+    );
+    final count = rangeEnd.difference(_rangeStartMonth).inDays;
+    return List.generate(
+      count,
+      (index) => _rangeStartMonth.add(Duration(days: index)),
+    );
   }
 
-  DateTime get _monthEnd => DateTime.utc(_month.year, _month.month + 1);
+  DateTime get _rangeEnd => DateTime.utc(
+    _rangeStartMonth.year,
+    _rangeStartMonth.month + _monthsInWindow,
+  );
 
   void _changeMonth(int offset) {
+    final targetMonth = DateTime.utc(_month.year, _month.month + offset);
+    final resetRange =
+        targetMonth.isBefore(_rangeStartMonth) ||
+        !targetMonth.isBefore(_rangeEnd);
     setState(() {
-      _month = DateTime.utc(_month.year, _month.month + offset);
+      _month = targetMonth;
       _selection = null;
+      if (resetRange) {
+        _rangeStartMonth = DateTime.utc(
+          targetMonth.year,
+          targetMonth.month - _monthsInWindow ~/ 2,
+        );
+      }
     });
-    if (_horizontalController.hasClients) _horizontalController.jumpTo(0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToMonth(targetMonth);
+    });
   }
 
   void _goToToday() {
     final now = DateTime.now();
     setState(() {
       _month = DateTime.utc(now.year, now.month);
+      _rangeStartMonth = DateTime.utc(
+        now.year,
+        now.month - _monthsInWindow ~/ 2,
+      );
       _selection = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToToday());
@@ -205,11 +238,75 @@ class _CalendarPageState extends State<CalendarPage> {
 
   void _scrollToToday() {
     if (!_horizontalController.hasClients) return;
-    final desiredOffset = (_today().day - 3) * _dayWidth;
+    final desiredOffset =
+        (_today().difference(_rangeStartMonth).inDays - 2) * _dayWidth;
     final offset = desiredOffset
         .clamp(0.0, _horizontalController.position.maxScrollExtent)
         .toDouble();
     _horizontalController.jumpTo(offset);
+  }
+
+  void _scrollToMonth(DateTime month) {
+    if (!_horizontalController.hasClients) return;
+    final desiredOffset = month.difference(_rangeStartMonth).inDays * _dayWidth;
+    final offset = desiredOffset
+        .clamp(0.0, _horizontalController.position.maxScrollExtent)
+        .toDouble();
+    _horizontalController.jumpTo(offset);
+  }
+
+  void _handleTimelineScroll() {
+    if (!_horizontalController.hasClients || _rangeAdjustmentPending) return;
+    final dates = _dates;
+    if (dates.isEmpty) return;
+
+    final visibleIndex = (_horizontalController.offset / _dayWidth)
+        .floor()
+        .clamp(0, dates.length - 1)
+        .toInt();
+    final dateAtLeftEdge = dates[visibleIndex];
+    final visibleMonth = DateTime.utc(
+      dateAtLeftEdge.year,
+      dateAtLeftEdge.month,
+    );
+    if (visibleMonth != _month && mounted) {
+      setState(() => _month = visibleMonth);
+    }
+    final position = _horizontalController.position;
+    final edgeBuffer = _edgeBufferDays * _dayWidth;
+    late DateTime nextRangeStart;
+    late double nextOffset;
+    if (position.pixels < edgeBuffer) {
+      nextRangeStart = DateTime.utc(
+        _rangeStartMonth.year,
+        _rangeStartMonth.month - _monthsPerShift,
+      );
+      final addedDays = _rangeStartMonth.difference(nextRangeStart).inDays;
+      nextOffset = position.pixels + addedDays * _dayWidth;
+    } else if (position.maxScrollExtent - position.pixels < edgeBuffer) {
+      nextRangeStart = DateTime.utc(
+        _rangeStartMonth.year,
+        _rangeStartMonth.month + _monthsPerShift,
+      );
+      final removedDays = nextRangeStart.difference(_rangeStartMonth).inDays;
+      nextOffset = position.pixels - removedDays * _dayWidth;
+    } else {
+      return;
+    }
+
+    _rangeAdjustmentPending = true;
+    setState(() => _rangeStartMonth = nextRangeStart);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_horizontalController.hasClients) {
+        final adjustedOffset = nextOffset
+            .clamp(0.0, _horizontalController.position.maxScrollExtent)
+            .toDouble();
+        _horizontalController.jumpTo(adjustedOffset);
+      }
+      _rangeAdjustmentPending = false;
+      _handleTimelineScroll();
+    });
   }
 
   void _showSnack(String message) {
@@ -758,8 +855,8 @@ class _CalendarPageState extends State<CalendarPage> {
         .where(
           (booking) =>
               booking.rentalUnitId == unit.id &&
-              booking.startDate.isBefore(_monthEnd) &&
-              booking.endDate.isAfter(_month),
+              booking.startDate.isBefore(_rangeEnd) &&
+              booking.endDate.isAfter(_rangeStartMonth),
         )
         .toList(growable: false);
     final cells = <Widget>[];
@@ -796,8 +893,10 @@ class _CalendarPageState extends State<CalendarPage> {
 
     final bookingCards = unitBookings
         .map((booking) {
-          final startOffset = booking.startDate.difference(_month).inDays;
-          final endOffset = booking.endDate.difference(_month).inDays;
+          final startOffset = booking.startDate
+              .difference(_rangeStartMonth)
+              .inDays;
+          final endOffset = booking.endDate.difference(_rangeStartMonth).inDays;
           final startIndex = startOffset.clamp(0, dates.length).toInt();
           final endIndex = endOffset.clamp(0, dates.length).toInt();
           final visibleDays = (endIndex - startIndex)
