@@ -25,9 +25,8 @@ class BookingEditorCubit extends Cubit<BookingEditorState> {
   BookingEditorCubit({
     required Booking booking,
     required BookingUseCases useCases,
-  })
-    : _useCases = useCases,
-      super(BookingEditorState(booking: booking));
+  }) : _useCases = useCases,
+       super(BookingEditorState(booking: booking));
 
   final BookingUseCases _useCases;
   Future<void> _writeQueue = Future<void>.value();

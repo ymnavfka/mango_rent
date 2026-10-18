@@ -102,8 +102,6 @@ class CalendarCubit extends Cubit<CalendarState> {
     );
   }
 
-  static const _monthsPerShift = 3;
-
   final BookingUseCases _useCases;
   StreamSubscription<List<RentalUnit>>? _unitsSubscription;
   StreamSubscription<List<Booking>>? _bookingsSubscription;

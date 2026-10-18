@@ -22,10 +22,8 @@ class BookingEditorSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => BookingEditorCubit(
-        booking: initialBooking,
-        useCases: useCases,
-      ),
+      create: (_) =>
+          BookingEditorCubit(booking: initialBooking, useCases: useCases),
       child: _BookingEditorView(unitName: unitName),
     );
   }
@@ -88,6 +86,7 @@ class _BookingEditorViewState extends State<_BookingEditorView> {
   }
 
   Future<void> _deleteBooking() async {
+    final editor = context.read<BookingEditorCubit>();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -109,8 +108,9 @@ class _BookingEditorViewState extends State<_BookingEditorView> {
       ),
     );
     if (confirmed != true) return;
-    await context.read<BookingEditorCubit>().deleteBooking();
-    if (mounted) Navigator.of(context).pop();
+    await editor.deleteBooking();
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   @override
@@ -346,10 +346,7 @@ class _BookingEditorViewState extends State<_BookingEditorView> {
                         ),
                         subtitle: Text(
                           _booking.hasPets ? 'С животными' : 'Без животных',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: mutedInk,
-                          ),
+                          style: const TextStyle(fontSize: 12, color: mutedInk),
                         ),
                         value: _booking.hasPets,
                         activeTrackColor: const Color(0xFFBBD8C2),

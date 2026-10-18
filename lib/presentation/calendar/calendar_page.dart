@@ -139,16 +139,18 @@ class _CalendarPageState extends State<CalendarPage> {
         calendar.rangeStartMonth.year,
         calendar.rangeStartMonth.month - _monthsPerShift,
       );
-      final addedDays =
-          calendar.rangeStartMonth.difference(nextRangeStart).inDays;
+      final addedDays = calendar.rangeStartMonth
+          .difference(nextRangeStart)
+          .inDays;
       nextOffset = position.pixels + addedDays * _dayWidth;
     } else if (position.maxScrollExtent - position.pixels < edgeBuffer) {
       nextRangeStart = DateTime.utc(
         calendar.rangeStartMonth.year,
         calendar.rangeStartMonth.month + _monthsPerShift,
       );
-      final removedDays =
-          nextRangeStart.difference(calendar.rangeStartMonth).inDays;
+      final removedDays = nextRangeStart
+          .difference(calendar.rangeStartMonth)
+          .inDays;
       nextOffset = position.pixels - removedDays * _dayWidth;
     } else {
       return;
@@ -177,34 +179,10 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<void> _addRentalUnit() async {
-    final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Новый объект'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Название объекта',
-            hintText: 'Например, Апартаменты у моря',
-          ),
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: const Text('Добавить'),
-          ),
-        ],
-      ),
+      builder: (_) => const _AddRentalUnitDialog(),
     );
-    controller.dispose();
     if (name == null) return;
     if (name.trim().isEmpty) {
       _showSnack('Введите название объекта.');
@@ -294,13 +272,6 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Widget _buildToolbar(bool compact) {
-    final monthText = compact
-        ? DateFormat('MMM yyyy', 'ru').format(_month)
-        : DateFormat.yMMMM('ru').format(_month);
-    final formattedMonth = monthText.isEmpty
-        ? monthText
-        : '${monthText[0].toUpperCase()}${monthText.substring(1)}';
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 13, 14, 4),
       child: Row(
@@ -325,32 +296,6 @@ class _CalendarPageState extends State<CalendarPage> {
             ),
           ),
           const Spacer(),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Предыдущий месяц',
-            onPressed: () => _changeMonth(-1),
-            icon: const Icon(Icons.chevron_left_rounded),
-          ),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: compact ? 90 : 150),
-            child: Text(
-              formattedMonth,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: ink,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Следующий месяц',
-            onPressed: () => _changeMonth(1),
-            icon: const Icon(Icons.chevron_right_rounded),
-          ),
           if (compact)
             IconButton(
               visualDensity: VisualDensity.compact,
@@ -367,6 +312,49 @@ class _CalendarPageState extends State<CalendarPage> {
               },
               child: const Text('Сегодня'),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMonthHeader(bool compact) {
+    final monthText = DateFormat.yMMMM('ru').format(_month);
+    final formattedMonth = monthText.isEmpty
+        ? monthText
+        : '${monthText[0].toUpperCase()}${monthText.substring(1)}';
+
+    return Container(
+      key: const ValueKey('calendar-month-header'),
+      width: double.infinity,
+      height: compact ? 62 : 70,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 12),
+      alignment: Alignment.center,
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Предыдущий месяц',
+            onPressed: () => _changeMonth(-1),
+            icon: const Icon(Icons.chevron_left_rounded),
+          ),
+          Expanded(
+            child: Text(
+              formattedMonth,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: ink,
+                fontSize: compact ? 25 : 28,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.6,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Следующий месяц',
+            onPressed: () => _changeMonth(1),
+            icon: const Icon(Icons.chevron_right_rounded),
+          ),
         ],
       ),
     );
@@ -504,97 +492,105 @@ class _CalendarPageState extends State<CalendarPage> {
         screenWidth < 520 ? 8 : 18,
         12,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            width: leftWidth,
-            child: Column(
+          _buildMonthHeader(screenWidth < 520),
+          Expanded(
+            child: Row(
               children: [
-                Container(
-                  height: 56,
-                  padding: const EdgeInsets.only(left: 14, bottom: 2),
-                  alignment: Alignment.centerLeft,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      bottom: BorderSide(color: line),
-                      right: BorderSide(color: line),
-                    ),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(14),
-                    ),
-                  ),
-                  child: const Text(
-                    'ОБЪЕКТ',
-                    style: TextStyle(
-                      color: mutedInk,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                    ),
+                SizedBox(
+                  width: leftWidth,
+                  child: Column(
+                    children: [
+                      Container(
+                        height: 56,
+                        padding: const EdgeInsets.only(left: 14, bottom: 2),
+                        alignment: Alignment.centerLeft,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          border: Border(
+                            bottom: BorderSide(color: line),
+                            right: BorderSide(color: line),
+                          ),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'ОБЪЕКТ',
+                          style: TextStyle(
+                            color: mutedInk,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            border: Border(right: BorderSide(color: line)),
+                            borderRadius: BorderRadius.only(
+                              bottomLeft: Radius.circular(14),
+                            ),
+                          ),
+                          child: ListView.builder(
+                            controller: _leftScrollController,
+                            itemExtent: rowHeight,
+                            itemCount: _units.length,
+                            itemBuilder: (context, index) =>
+                                _buildUnitLabel(_units[index]),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      border: Border(right: BorderSide(color: line)),
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(14),
-                      ),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(14),
+                      bottomRight: Radius.circular(14),
                     ),
-                    child: ListView.builder(
-                      controller: _leftScrollController,
-                      itemExtent: rowHeight,
-                      itemCount: _units.length,
-                      itemBuilder: (context, index) =>
-                          _buildUnitLabel(_units[index]),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: line),
+                      ),
+                      child: SingleChildScrollView(
+                        controller: _horizontalController,
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: dates.length * _dayWidth,
+                          child: Column(
+                            children: [
+                              SizedBox(
+                                height: 56,
+                                child: Row(
+                                  children: dates
+                                      .map((date) => _buildDateHeader(date))
+                                      .toList(growable: false),
+                                ),
+                              ),
+                              Expanded(
+                                child: ListView.builder(
+                                  controller: _rightScrollController,
+                                  itemExtent: rowHeight,
+                                  itemCount: _units.length,
+                                  itemBuilder: (context, index) =>
+                                      _buildCalendarRow(_units[index], dates),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ],
-            ),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topRight: Radius.circular(14),
-                bottomRight: Radius.circular(14),
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: line),
-                ),
-                child: SingleChildScrollView(
-                  controller: _horizontalController,
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: dates.length * _dayWidth,
-                    child: Column(
-                      children: [
-                        SizedBox(
-                          height: 56,
-                          child: Row(
-                            children: dates
-                                .map((date) => _buildDateHeader(date))
-                                .toList(growable: false),
-                          ),
-                        ),
-                        Expanded(
-                          child: ListView.builder(
-                            controller: _rightScrollController,
-                            itemExtent: rowHeight,
-                            itemCount: _units.length,
-                            itemBuilder: (context, index) =>
-                                _buildCalendarRow(_units[index], dates),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
             ),
           ),
         ],
@@ -678,6 +674,7 @@ class _CalendarPageState extends State<CalendarPage> {
       final isSelected =
           _selection?.rentalUnitId == unit.id &&
           sameDay(_selection!.date, date);
+      final isToday = sameDay(date, _today());
       final isWeekend = date.weekday >= DateTime.saturday;
       cells.add(
         SizedBox(
@@ -686,6 +683,8 @@ class _CalendarPageState extends State<CalendarPage> {
           child: Material(
             color: isSelected
                 ? const Color(0xFFDCEDE0)
+                : isToday
+                ? const Color(0xFFEAF3EB)
                 : isWeekend
                 ? const Color(0xFFFCFCFB)
                 : Colors.white,
@@ -845,6 +844,50 @@ class _CalendarPageState extends State<CalendarPage> {
   DateTime _today() {
     final now = DateTime.now();
     return DateTime.utc(now.year, now.month, now.day);
+  }
+}
+
+class _AddRentalUnitDialog extends StatefulWidget {
+  const _AddRentalUnitDialog();
+
+  @override
+  State<_AddRentalUnitDialog> createState() => _AddRentalUnitDialogState();
+}
+
+class _AddRentalUnitDialogState extends State<_AddRentalUnitDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Новый объект'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          labelText: 'Название объекта',
+          hintText: 'Например, Апартаменты у моря',
+        ),
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Добавить'),
+        ),
+      ],
+    );
   }
 }
 
