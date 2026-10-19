@@ -215,14 +215,34 @@ class _BookingEditorViewState extends State<_BookingEditorView> {
                         decoration: const InputDecoration(
                           labelText: 'Статус оплаты',
                         ),
-                        items: BookingStatus.values
-                            .map(
-                              (status) => DropdownMenuItem(
-                                value: status,
-                                child: Text(status.label),
-                              ),
-                            )
-                            .toList(growable: false),
+                        items: BookingStatus.values.map((status) {
+                          final palette = statusPalette(status);
+                          return DropdownMenuItem(
+                            value: status,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  key: ValueKey(
+                                    'booking-status-color-${status.storageValue}',
+                                  ),
+                                  width: 14,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                    color: palette.background,
+                                    border: Border.all(color: palette.border),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  status.label,
+                                  style: TextStyle(color: palette.foreground),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(growable: false),
                         onChanged: (status) {
                           if (status != null) {
                             _change(_booking.copyWith(status: status));

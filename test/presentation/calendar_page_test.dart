@@ -13,6 +13,22 @@ import 'package:mango_rent/presentation/theme/app_palette.dart';
 
 void main() {
   group('Calendar month heading', () {
+    testWidgets('does not show a separate status legend above the calendar', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_calendarApp());
+      await tester.pumpAndSettle();
+
+      for (final status in BookingStatus.values) {
+        expect(find.text(status.label), findsNothing);
+      }
+    });
+
     testWidgets('shows a prominent full-width month heading above the dates', (
       tester,
     ) async {

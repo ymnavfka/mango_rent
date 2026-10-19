@@ -6,6 +6,7 @@ import 'package:mango_rent/domain/entities/booking.dart';
 import 'package:mango_rent/domain/entities/rental_unit.dart';
 import 'package:mango_rent/domain/usecases/booking_use_cases.dart';
 import 'package:mango_rent/presentation/calendar/widgets/booking_editor_sheet.dart';
+import 'package:mango_rent/presentation/theme/app_palette.dart';
 
 import '../support/in_memory_booking_repository.dart';
 
@@ -65,6 +66,35 @@ void main() {
         expect(find.text(label), findsOneWidget, reason: 'missing $label');
       }
       expect(find.text('Изменения сохраняются автоматически'), findsOneWidget);
+    });
+
+    testWidgets('colors status options to match their calendar bookings', (
+      tester,
+    ) async {
+      await _openEditor(tester, booking, useCases);
+
+      final statusDropdown = find.byType(
+        DropdownButtonFormField<BookingStatus>,
+      );
+      await tester.ensureVisible(statusDropdown);
+      await tester.tap(statusDropdown);
+      await tester.pumpAndSettle();
+
+      for (final status in BookingStatus.values) {
+        final colorMark = find.byKey(
+          ValueKey('booking-status-color-${status.storageValue}'),
+        );
+        expect(colorMark, findsWidgets, reason: 'missing ${status.label} color');
+        final marker = tester.widget<Container>(colorMark.first);
+        expect(
+          (marker.decoration! as BoxDecoration).color,
+          statusPalette(status).background,
+          reason: '${status.label} should match its calendar color',
+        );
+
+        final label = tester.widget<Text>(find.text(status.label).last);
+        expect(label.style?.color, statusPalette(status).foreground);
+      }
     });
 
     testWidgets('edits every booking detail and saves changes automatically', (

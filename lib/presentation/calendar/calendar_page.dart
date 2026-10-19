@@ -256,7 +256,6 @@ class _CalendarPageState extends State<CalendarPage> {
                   else if (state.units.isEmpty)
                     Expanded(child: _buildEmptyState())
                   else ...[
-                    _buildLegend(compact),
                     Expanded(child: _buildCalendar(width)),
                     if (state.selection != null)
                       const Padding(
@@ -471,21 +470,6 @@ class _CalendarPageState extends State<CalendarPage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildLegend(bool compact) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(compact ? 16 : 22, 2, 18, 10),
-      child: Wrap(
-        spacing: compact ? 6 : 10,
-        runSpacing: 6,
-        children: BookingStatus.values
-            .map(
-              (status) => _StatusLegendItem(status: status, compact: compact),
-            )
-            .toList(growable: false),
       ),
     );
   }
@@ -964,34 +948,6 @@ class _AddRentalUnitDialogState extends State<_AddRentalUnitDialog> {
           child: const Text('Добавить'),
         ),
       ],
-    );
-  }
-}
-
-class _StatusLegendItem extends StatelessWidget {
-  const _StatusLegendItem({required this.status, required this.compact});
-
-  final BookingStatus status;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = statusPalette(status);
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: palette.background,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.border),
-      ),
-      child: Text(
-        status.label,
-        style: TextStyle(
-          color: palette.foreground,
-          fontSize: compact ? 10 : 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
     );
   }
 }
