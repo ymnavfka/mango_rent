@@ -21,6 +21,7 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   static const _monthsPerShift = 3;
   static const _edgeBufferDays = 30;
+  static const _unitColumnHorizontalPadding = 7.0;
 
   late final ScrollController _leftScrollController;
   late final ScrollController _rightScrollController;
@@ -29,6 +30,8 @@ class _CalendarPageState extends State<CalendarPage> {
   bool _syncingScroll = false;
   bool _initialScrollQueued = false;
   bool _rangeAdjustmentPending = false;
+  double _activeObjectColumnWidth = 32;
+  double? _activeDayWidth;
 
   CalendarCubit get _cubit => context.read<CalendarCubit>();
   CalendarState get _calendar => _cubit.state;
@@ -40,7 +43,8 @@ class _CalendarPageState extends State<CalendarPage> {
   DateTime get _rangeEnd => _calendar.rangeEnd;
   List<DateTime> get _dates => _calendar.dates;
 
-  double get _dayWidth => dayWidthForScreen(MediaQuery.sizeOf(context).width);
+  double get _dayWidth =>
+      _activeDayWidth ?? dayWidthForScreen(MediaQuery.sizeOf(context).width);
 
   @override
   void initState() {
@@ -227,6 +231,11 @@ class _CalendarPageState extends State<CalendarPage> {
         builder: (context, state) {
           final width = MediaQuery.sizeOf(context).width;
           final compact = width < 520;
+          _activeObjectColumnWidth = _objectColumnWidthForScreen(width);
+          _activeDayWidth = dayWidthForScreen(
+            width,
+            objectColumnWidth: _activeObjectColumnWidth,
+          );
           if (state.units.isNotEmpty && !_initialScrollQueued) {
             _initialScrollQueued = true;
             WidgetsBinding.instance.addPostFrameCallback(
@@ -482,7 +491,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Widget _buildCalendar(double screenWidth) {
-    final leftWidth = objectColumnWidthForScreen(screenWidth);
+    final leftWidth = _activeObjectColumnWidth;
     final dates = _dates;
 
     return Padding(
@@ -500,13 +509,14 @@ class _CalendarPageState extends State<CalendarPage> {
             child: Row(
               children: [
                 SizedBox(
+                  key: const ValueKey('calendar-object-column'),
                   width: leftWidth,
                   child: Column(
                     children: [
                       Container(
+                        key: const ValueKey('calendar-corner-cell'),
+                        width: double.infinity,
                         height: 56,
-                        padding: const EdgeInsets.only(left: 14, bottom: 2),
-                        alignment: Alignment.centerLeft,
                         decoration: const BoxDecoration(
                           color: Colors.white,
                           border: Border(
@@ -515,15 +525,6 @@ class _CalendarPageState extends State<CalendarPage> {
                           ),
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(14),
-                          ),
-                        ),
-                        child: const Text(
-                          'ОБЪЕКТ',
-                          style: TextStyle(
-                            color: mutedInk,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.2,
                           ),
                         ),
                       ),
@@ -550,6 +551,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 ),
                 Expanded(
                   child: ClipRRect(
+                    key: const ValueKey('calendar-date-viewport'),
                     borderRadius: const BorderRadius.only(
                       topRight: Radius.circular(14),
                       bottomRight: Radius.circular(14),
@@ -557,7 +559,11 @@ class _CalendarPageState extends State<CalendarPage> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        border: Border.all(color: line),
+                        border: const Border(
+                          left: BorderSide(color: line),
+                          right: BorderSide(color: line),
+                          bottom: BorderSide(color: line),
+                        ),
                       ),
                       child: SingleChildScrollView(
                         controller: _horizontalController,
@@ -599,20 +605,27 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Widget _buildUnitLabel(RentalUnit unit) {
+    const horizontalPadding = _unitColumnHorizontalPadding / 2;
+    final availableWidth = _activeObjectColumnWidth - horizontalPadding * 2;
+    final fontSize = _unitNameFontSize(
+      unit.name,
+      availableWidth: availableWidth,
+      availableHeight: rowHeight,
+    );
     return Container(
       height: rowHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 7),
+      padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: line)),
       ),
       alignment: Alignment.centerLeft,
       child: Text(
         unit.name,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
+        softWrap: true,
+        overflow: TextOverflow.clip,
+        style: TextStyle(
           color: ink,
-          fontSize: 11,
+          fontSize: fontSize,
           fontWeight: FontWeight.w600,
           height: 1.2,
         ),
@@ -620,11 +633,69 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
+  double _unitNameFontSize(
+    String name, {
+    required double availableWidth,
+    required double availableHeight,
+  }) {
+    const baseFontSize = 11.0;
+    const labelStyle = TextStyle(
+      color: ink,
+      fontWeight: FontWeight.w600,
+      height: 1.2,
+    );
+    final direction = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+
+    bool fits(double fontSize) {
+      final style = labelStyle.copyWith(fontSize: fontSize);
+      final words = name.trim().split(RegExp(r'\s+'));
+      for (final word in words) {
+        if (word.isEmpty) continue;
+        final wordPainter = TextPainter(
+          text: TextSpan(text: word, style: style),
+          textDirection: direction,
+          textScaler: textScaler,
+          maxLines: 1,
+        )..layout();
+        final wordFits = wordPainter.width <= availableWidth;
+        wordPainter.dispose();
+        if (!wordFits) return false;
+      }
+
+      final textPainter = TextPainter(
+        text: TextSpan(text: name, style: style),
+        textDirection: direction,
+        textScaler: textScaler,
+      )..layout(maxWidth: availableWidth);
+      final textFits = textPainter.height <= availableHeight;
+      textPainter.dispose();
+      return textFits;
+    }
+
+    if (fits(baseFontSize)) return baseFontSize;
+
+    var low = 0.5;
+    var high = baseFontSize;
+    for (var iteration = 0; iteration < 16; iteration++) {
+      final candidate = (low + high) / 2;
+      if (fits(candidate)) {
+        low = candidate;
+      } else {
+        high = candidate;
+      }
+    }
+    return low;
+  }
+
   Widget _buildDateHeader(DateTime date) {
     final isWeekend = date.weekday >= DateTime.saturday;
     final isToday = sameDay(date, _today());
     final background = isToday ? const Color(0xFFEAF3EB) : Colors.white;
     return Container(
+      key: ValueKey(
+        'calendar-date-header-${date.year}-${date.month}-${date.day}',
+      ),
       width: _dayWidth,
       height: 56,
       alignment: Alignment.center,
@@ -635,30 +706,36 @@ class _CalendarPageState extends State<CalendarPage> {
           right: BorderSide(color: line),
         ),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            DateFormat.E('ru').format(date).toUpperCase(),
-            style: TextStyle(
-              color: isWeekend ? const Color(0xFFB16B5F) : mutedInk,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              DateFormat.E('ru').format(date).toUpperCase(),
+              style: TextStyle(
+                color: isWeekend ? const Color(0xFFB16B5F) : mutedInk,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            '${date.day}',
-            style: TextStyle(
-              color: isToday ? green : ink,
-              fontSize: 14,
-              fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
+            const SizedBox(height: 2),
+            Text(
+              '${date.day}',
+              style: TextStyle(
+                color: isToday ? green : ink,
+                fontSize: 24,
+                fontWeight: isToday ? FontWeight.w800 : FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+
+  double _objectColumnWidthForScreen(double screenWidth) => screenWidth * 0.15;
 
   Widget _buildCalendarRow(RentalUnit unit, List<DateTime> dates) {
     final unitBookings = _bookings

@@ -16,11 +16,12 @@ double objectColumnWidthForScreen(double screenWidth) {
   return 90;
 }
 
-double dayWidthForScreen(double screenWidth) {
+double dayWidthForScreen(double screenWidth, {double? objectColumnWidth}) {
   final horizontalPadding = screenWidth < 520 ? 16.0 : 36.0;
-  final objectColumnWidth = objectColumnWidthForScreen(screenWidth);
+  final resolvedObjectColumnWidth =
+      objectColumnWidth ?? objectColumnWidthForScreen(screenWidth);
   final availableWidth =
-      screenWidth - horizontalPadding - objectColumnWidth - 2;
+      screenWidth - horizontalPadding - resolvedObjectColumnWidth - 2;
   final preferredWidth = screenWidth < 520
       ? 44.0
       : screenWidth < 800
@@ -29,7 +30,7 @@ double dayWidthForScreen(double screenWidth) {
       ? 48.0
       : 52.0;
 
-  return (availableWidth / 9).clamp(1.0, preferredWidth).toDouble();
+  return (availableWidth / 10).clamp(24.0, preferredWidth).toDouble();
 }
 
 class StatusPalette {
