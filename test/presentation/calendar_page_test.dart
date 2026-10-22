@@ -210,7 +210,7 @@ void main() {
       expect(_detailBooking(2), findsOneWidget);
     });
 
-    testWidgets('booking segments stay square where they cross a week row', (
+    testWidgets('split booking hides a partial label when it cannot fit', (
       tester,
     ) async {
       tester.view.physicalSize = const Size(390, 844);
@@ -228,7 +228,7 @@ void main() {
         rentalUnitId: 1,
         startDate: weekStart.add(const Duration(days: 3)),
         endDate: weekStart.add(const Duration(days: 9)),
-        clientName: 'Переходящая бронь',
+        clientName: 'Аня',
       );
 
       await tester.pumpWidget(_calendarApp(bookings: [booking]));
@@ -244,6 +244,33 @@ void main() {
         _detailBookingSegmentKey(booking.id!, secondWeekStart),
       );
       expect(_detailBooking(booking.id!), findsNWidgets(2));
+      final summary = '${nightLabel(booking.nights)} · 1 чел.';
+      expect(
+        find.descendant(
+          of: firstSegment,
+          matching: find.text(booking.clientName),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: secondSegment, matching: find.byType(Text)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: firstSegment, matching: find.text(summary)),
+        findsOneWidget,
+      );
+      final firstLabel = tester.widget<Text>(
+        find.descendant(
+          of: firstSegment,
+          matching: find.text(booking.clientName),
+        ),
+      );
+      final firstSummary = tester.widget<Text>(
+        find.descendant(of: firstSegment, matching: find.text(summary)),
+      );
+      expect(firstLabel.style?.fontSize, 11);
+      expect(firstSummary.style?.fontSize, 9);
       expect(
         tester
             .widget<Material>(
@@ -271,6 +298,92 @@ void main() {
           topRight: Radius.circular(9),
           bottomRight: Radius.circular(9),
         ),
+      );
+    });
+
+    testWidgets('wide week segments repeat the exact same booking label', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(600, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final now = DateTime.now();
+      final monthStart = DateTime.utc(now.year, now.month);
+      final weekStart = monthStart.subtract(
+        Duration(days: monthStart.weekday - DateTime.monday),
+      );
+      final booking = Booking(
+        id: 43,
+        rentalUnitId: 1,
+        startDate: weekStart.add(const Duration(days: 3)),
+        endDate: weekStart.add(const Duration(days: 10)),
+        clientName: 'Аня',
+      );
+
+      await tester.pumpWidget(_calendarApp(bookings: [booking]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      final firstSegment = find.byKey(
+        _detailBookingSegmentKey(booking.id!, weekStart),
+      );
+      final secondSegment = find.byKey(
+        _detailBookingSegmentKey(
+          booking.id!,
+          weekStart.add(const Duration(days: 7)),
+        ),
+      );
+      final summary = '${nightLabel(booking.nights)} · 1 чел.';
+      final firstTexts = tester
+          .widgetList<Text>(
+            find.descendant(of: firstSegment, matching: find.byType(Text)),
+          )
+          .toList();
+      final secondTexts = tester
+          .widgetList<Text>(
+            find.descendant(of: secondSegment, matching: find.byType(Text)),
+          )
+          .toList();
+
+      expect(firstTexts.map((text) => text.data), [
+        booking.clientName,
+        summary,
+      ]);
+      expect(secondTexts.map((text) => text.data), [
+        booking.clientName,
+        summary,
+      ]);
+      expect(firstTexts[0].style?.fontSize, secondTexts[0].style?.fontSize);
+      expect(firstTexts[1].style?.fontSize, secondTexts[1].style?.fontSize);
+
+      final firstCardRect = tester.getRect(
+        find.descendant(of: firstSegment, matching: find.byType(Material)),
+      );
+      final secondCardRect = tester.getRect(
+        find.descendant(of: secondSegment, matching: find.byType(Material)),
+      );
+      final firstNameRect = tester.getRect(
+        find.descendant(
+          of: firstSegment,
+          matching: find.text(booking.clientName),
+        ),
+      );
+      final secondNameRect = tester.getRect(
+        find.descendant(
+          of: secondSegment,
+          matching: find.text(booking.clientName),
+        ),
+      );
+      expect(
+        firstNameRect.top - firstCardRect.top,
+        closeTo(secondNameRect.top - secondCardRect.top, 0.1),
+      );
+      expect(
+        firstNameRect.left - firstCardRect.left,
+        closeTo(secondNameRect.left - secondCardRect.left, 0.1),
       );
     });
 

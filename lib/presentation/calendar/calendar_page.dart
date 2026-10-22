@@ -1019,11 +1019,42 @@ class _CalendarPageState extends State<CalendarPage> {
                     );
                     final palette = statusPalette(booking.status);
                     final compactCard = width < 104;
+                    final spansMultipleRows =
+                        continuesFromPreviousWeek || continuesIntoNextWeek;
                     final name = booking.clientName.isEmpty
                         ? 'Бронь'
-                        : compactCard
+                        : compactCard && !spansMultipleRows
                         ? booking.clientName.characters.first
                         : booking.clientName;
+                    final summary =
+                        '${nightLabel(booking.nights)} · ${booking.guests + booking.children} чел.';
+                    const fullNameFontSize = 11.0;
+                    const summaryFontSize = 9.0;
+                    final fullLabelFits =
+                        spansMultipleRows &&
+                        _singleLineTextFits(
+                          name,
+                          availableWidth: width - 12,
+                          fontSize: fullNameFontSize,
+                        ) &&
+                        _singleLineTextFits(
+                          summary,
+                          availableWidth: width - 12,
+                          fontSize: summaryFontSize,
+                          fontWeight: FontWeight.w600,
+                        );
+                    final showFullBookingLabel =
+                        spansMultipleRows && fullLabelFits;
+                    final showClientName =
+                        !spansMultipleRows || showFullBookingLabel;
+                    final showSummary = spansMultipleRows
+                        ? showFullBookingLabel
+                        : !compactCard;
+                    final nameFontSize = spansMultipleRows
+                        ? fullNameFontSize
+                        : compactCard
+                        ? 9.0
+                        : fullNameFontSize;
                     return Positioned(
                       key: ValueKey(
                         'calendar-detail-booking-${booking.id}-'
@@ -1060,26 +1091,31 @@ class _CalendarPageState extends State<CalendarPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: palette.foreground,
-                                    fontSize: compactCard ? 9 : 11,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                if (!compactCard)
+                                if (showClientName)
                                   Text(
-                                    '${nightLabel(booking.nights)} · ${booking.guests + booking.children} чел.',
+                                    name,
                                     maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    overflow: spansMultipleRows
+                                        ? TextOverflow.clip
+                                        : TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: palette.foreground,
+                                      fontSize: nameFontSize,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                if (showSummary)
+                                  Text(
+                                    summary,
+                                    maxLines: 1,
+                                    overflow: spansMultipleRows
+                                        ? TextOverflow.clip
+                                        : TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: palette.foreground.withValues(
                                         alpha: 0.86,
                                       ),
-                                      fontSize: 9,
+                                      fontSize: summaryFontSize,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -1101,6 +1137,26 @@ class _CalendarPageState extends State<CalendarPage> {
         );
       },
     );
+  }
+
+  bool _singleLineTextFits(
+    String text, {
+    required double availableWidth,
+    required double fontSize,
+    FontWeight fontWeight = FontWeight.w800,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(fontSize: fontSize, fontWeight: fontWeight),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final fits = painter.width <= availableWidth;
+    painter.dispose();
+    return fits;
   }
 
   double _unitNameFontSize(
