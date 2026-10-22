@@ -210,6 +210,91 @@ void main() {
       expect(_detailBooking(2), findsOneWidget);
     });
 
+    testWidgets('detail bookings occupy half of arrival and checkout days', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(600, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final now = DateTime.now();
+      final monthStart = DateTime.utc(now.year, now.month);
+      final weekStart = monthStart.subtract(
+        Duration(days: monthStart.weekday - DateTime.monday),
+      );
+      final booking = Booking(
+        id: 41,
+        rentalUnitId: 1,
+        startDate: weekStart.add(const Duration(days: 2)),
+        endDate: weekStart.add(const Duration(days: 5)),
+        clientName: 'Анна',
+      );
+
+      await tester.pumpWidget(_calendarApp(bookings: [booking]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      final segment = find.byKey(
+        _detailBookingSegmentKey(booking.id!, weekStart),
+      );
+      final segmentRect = tester.getRect(
+        find.descendant(of: segment, matching: find.byType(Material)),
+      );
+      final arrivalCell = tester.getRect(
+        find.byKey(_detailDayKey(booking.startDate)),
+      );
+      final checkoutCell = tester.getRect(
+        find.byKey(_detailDayKey(booking.endDate)),
+      );
+
+      expect(segmentRect.left, closeTo(arrivalCell.center.dx + 2, 0.1));
+      expect(segmentRect.right, closeTo(checkoutCell.center.dx - 2, 0.1));
+    });
+
+    testWidgets('booking ending on a week boundary reaches checkout noon', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(600, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final now = DateTime.now();
+      final monthStart = DateTime.utc(now.year, now.month);
+      final weekStart = monthStart.subtract(
+        Duration(days: monthStart.weekday - DateTime.monday),
+      );
+      final checkoutDate = weekStart.add(const Duration(days: 7));
+      final booking = Booking(
+        id: 44,
+        rentalUnitId: 1,
+        startDate: weekStart.add(const Duration(days: 2)),
+        endDate: checkoutDate,
+        clientName: 'Анна',
+      );
+
+      await tester.pumpWidget(_calendarApp(bookings: [booking]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      final checkoutWeekStart = checkoutDate;
+      final checkoutSegment = find.byKey(
+        _detailBookingSegmentKey(booking.id!, checkoutWeekStart),
+      );
+      final segmentRect = tester.getRect(
+        find.descendant(of: checkoutSegment, matching: find.byType(Material)),
+      );
+      final checkoutCell = tester.getRect(
+        find.byKey(_detailDayKey(checkoutDate)),
+      );
+
+      expect(segmentRect.left, closeTo(checkoutCell.left + 2, 0.1));
+      expect(segmentRect.right, closeTo(checkoutCell.center.dx - 2, 0.1));
+    });
+
     testWidgets('split booking hides a partial label when it cannot fit', (
       tester,
     ) async {
@@ -226,8 +311,8 @@ void main() {
       final booking = Booking(
         id: 42,
         rentalUnitId: 1,
-        startDate: weekStart.add(const Duration(days: 3)),
-        endDate: weekStart.add(const Duration(days: 9)),
+        startDate: weekStart.add(const Duration(days: 1)),
+        endDate: weekStart.add(const Duration(days: 8)),
         clientName: 'Аня',
       );
 
@@ -516,6 +601,9 @@ ValueKey<String> _detailBookingSegmentKey(int bookingId, DateTime weekStart) =>
       'calendar-detail-booking-$bookingId-'
       '${weekStart.year}-${weekStart.month}-${weekStart.day}',
     );
+
+ValueKey<String> _detailDayKey(DateTime date) =>
+    ValueKey('calendar-detail-day-${date.year}-${date.month}-${date.day}');
 
 Finder _keyStartingWith(String prefix) => find.byWidgetPredicate((widget) {
   final key = widget.key;

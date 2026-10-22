@@ -982,23 +982,26 @@ class _CalendarPageState extends State<CalendarPage> {
                     (booking) =>
                         booking.rentalUnitId == unit.id &&
                         booking.startDate.isBefore(weekEnd) &&
-                        booking.endDate.isAfter(weekStart),
+                        !booking.endDate.isBefore(weekStart),
                   )
                   .map((booking) {
-                    final start = booking.startDate.isBefore(weekStart)
-                        ? weekStart
-                        : booking.startDate;
-                    final end = booking.endDate.isAfter(weekEnd)
-                        ? weekEnd
-                        : booking.endDate;
-                    final startDay = start.difference(weekStart).inDays;
-                    final endDay = end.difference(weekStart).inDays;
-                    final left = startDay * resolvedCellWidth + 2;
-                    final width = (endDay - startDay) * resolvedCellWidth - 4;
+                    final startDay = booking.startDate
+                        .difference(weekStart)
+                        .inDays;
+                    final endDay = booking.endDate.difference(weekStart).inDays;
+                    final startPosition = booking.startDate.isBefore(weekStart)
+                        ? 0.0
+                        : (startDay + 0.5) * resolvedCellWidth;
+                    final weekWidth = resolvedCellWidth * 7;
+                    final endPosition = !booking.endDate.isBefore(weekEnd)
+                        ? weekWidth
+                        : (endDay + 0.5) * resolvedCellWidth;
+                    final left = startPosition + 2;
+                    final width = endPosition - startPosition - 4;
                     if (width <= 0) return const SizedBox.shrink();
                     final continuesFromPreviousWeek = booking.startDate
                         .isBefore(weekStart);
-                    final continuesIntoNextWeek = booking.endDate.isAfter(
+                    final continuesIntoNextWeek = !booking.endDate.isBefore(
                       weekEnd,
                     );
                     const outerRadius = Radius.circular(9);
