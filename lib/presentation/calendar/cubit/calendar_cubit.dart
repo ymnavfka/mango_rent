@@ -194,6 +194,11 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   void clearNotice() => emit(state.copyWith(clearNotice: true));
 
+  void clearSelection() {
+    if (state.selection == null) return;
+    emit(state.copyWith(clearSelection: true));
+  }
+
   void _showNotice(String message) {
     if (isClosed) return;
     emit(state.copyWith(notice: message));

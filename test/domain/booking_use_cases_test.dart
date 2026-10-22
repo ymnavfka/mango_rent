@@ -119,6 +119,24 @@ void main() {
         await repository.dispose();
       },
     );
+
+    test('allows checkout on the next booking check-in date', () async {
+      final repository = InMemoryBookingRepository(bookings: [existing]);
+      final useCases = BookingUseCases(repository);
+
+      final previousStay = await useCases.saveBooking(
+        Booking(
+          id: null,
+          rentalUnitId: 1,
+          startDate: DateTime.utc(2026, 10, 8),
+          // Booking dates are calendar days; the time component is ignored.
+          endDate: DateTime.utc(2026, 10, 10, 12),
+        ),
+      );
+
+      expect(previousStay.id, isNotNull);
+      await repository.dispose();
+    });
   });
 
   test('forwards add and delete operations to the repository', () async {

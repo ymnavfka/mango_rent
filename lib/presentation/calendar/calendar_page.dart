@@ -30,6 +30,7 @@ class _CalendarPageState extends State<CalendarPage> {
   bool _syncingScroll = false;
   bool _initialScrollQueued = false;
   bool _rangeAdjustmentPending = false;
+  int? _detailRentalUnitId;
   double _activeObjectColumnWidth = 32;
   double? _activeDayWidth;
 
@@ -87,6 +88,7 @@ class _CalendarPageState extends State<CalendarPage> {
 
   void _changeMonth(int offset) {
     final targetMonth = _cubit.changeMonth(offset);
+    if (_detailRentalUnitId != null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToMonth(targetMonth);
     });
@@ -94,7 +96,18 @@ class _CalendarPageState extends State<CalendarPage> {
 
   void _goToToday() {
     _cubit.goToToday();
+    if (_detailRentalUnitId != null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToToday());
+  }
+
+  void _openUnitCalendar(int rentalUnitId) {
+    _cubit.clearSelection();
+    setState(() => _detailRentalUnitId = rentalUnitId);
+  }
+
+  void _closeUnitCalendar() {
+    _cubit.clearSelection();
+    setState(() => _detailRentalUnitId = null);
   }
 
   void _scrollToToday() {
@@ -243,34 +256,43 @@ class _CalendarPageState extends State<CalendarPage> {
             );
           }
 
-          return Scaffold(
-            body: SafeArea(
-              child: Column(
-                children: [
-                  _buildToolbar(compact),
-                  _buildSectionHeading(compact),
-                  if (state.isLoading)
-                    const Expanded(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (state.units.isEmpty)
-                    Expanded(child: _buildEmptyState())
-                  else ...[
-                    Expanded(child: _buildCalendar(width)),
-                    if (state.selection != null)
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
-                        child: Text(
-                          'Выберите вторую дату в той же строке',
-                          style: TextStyle(
-                            color: green,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+          return PopScope<Object?>(
+            canPop: _detailRentalUnitId == null,
+            onPopInvokedWithResult: (didPop, result) {
+              if (!didPop && _detailRentalUnitId != null) {
+                _closeUnitCalendar();
+              }
+            },
+            child: Scaffold(
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    _buildToolbar(compact),
+                    _buildSectionHeading(compact),
+                    if (state.isLoading)
+                      const Expanded(
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (state.units.isEmpty)
+                      Expanded(child: _buildEmptyState())
+                    else ...[
+                      Expanded(child: _buildCalendar(width)),
+                      if (state.selection != null &&
+                          _detailRentalUnitId == null)
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+                          child: Text(
+                            'Выберите вторую дату в той же строке',
+                            style: TextStyle(
+                              color: green,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           );
@@ -475,6 +497,10 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Widget _buildCalendar(double screenWidth) {
+    if (_detailRentalUnitId != null) {
+      return _buildUnitCalendar(screenWidth, _detailRentalUnitId!);
+    }
+
     final leftWidth = _activeObjectColumnWidth;
     final dates = _dates;
 
@@ -596,24 +622,463 @@ class _CalendarPageState extends State<CalendarPage> {
       availableWidth: availableWidth,
       availableHeight: rowHeight,
     );
-    return Container(
-      height: rowHeight,
-      padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: line)),
-      ),
-      alignment: Alignment.centerLeft,
-      child: Text(
-        unit.name,
-        softWrap: true,
-        overflow: TextOverflow.clip,
-        style: TextStyle(
-          color: ink,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w600,
-          height: 1.2,
+    final selected = _detailRentalUnitId == unit.id;
+    return Material(
+      color: selected ? const Color(0xFFE7F1E9) : Colors.white,
+      child: InkWell(
+        key: ValueKey('calendar-unit-selector-${unit.id}'),
+        onTap: () => _openUnitCalendar(unit.id),
+        child: Container(
+          height: rowHeight,
+          padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: line)),
+          ),
+          alignment: Alignment.centerLeft,
+          child: Text(
+            unit.name,
+            softWrap: true,
+            overflow: TextOverflow.clip,
+            style: TextStyle(
+              color: selected ? green : ink,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildUnitCalendar(double screenWidth, int selectedUnitId) {
+    const weekdayHeaderHeight = 42.0;
+    const unitHeaderHeight = 42.0;
+    final compact = screenWidth < 520;
+    final horizontalPadding = compact ? 8.0 : 18.0;
+    final leftWidth = _activeObjectColumnWidth;
+    final monthStart = DateTime.utc(_month.year, _month.month);
+    final gridStart = monthStart.subtract(
+      Duration(days: monthStart.weekday - DateTime.monday),
+    );
+    final dates = List.generate(
+      42,
+      (index) => gridStart.add(Duration(days: index)),
+    );
+    RentalUnit? selectedUnit;
+    for (final unit in _units) {
+      if (unit.id == selectedUnitId) {
+        selectedUnit = unit;
+        break;
+      }
+    }
+
+    return Padding(
+      key: const ValueKey('calendar-detail-view'),
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 8),
+      child: Column(
+        children: [
+          _buildMonthHeader(compact),
+          Expanded(
+            child: Stack(
+              children: [
+                Row(
+                  children: [
+                    SizedBox(
+                      key: const ValueKey('calendar-object-column'),
+                      width: leftWidth,
+                      child: Column(
+                        children: [
+                          Container(
+                            key: const ValueKey('calendar-detail-unit-header'),
+                            height: unitHeaderHeight,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              border: Border(
+                                top: BorderSide(color: line),
+                                right: BorderSide(color: line),
+                                bottom: BorderSide(color: line),
+                                left: BorderSide(color: line),
+                              ),
+                              borderRadius: BorderRadius.only(
+                                topLeft: Radius.circular(14),
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.apartment_rounded,
+                              color: mutedInk,
+                              size: 17,
+                            ),
+                          ),
+                          Expanded(
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                border: Border(
+                                  left: BorderSide(color: line),
+                                  right: BorderSide(color: line),
+                                  bottom: BorderSide(color: line),
+                                ),
+                                borderRadius: BorderRadius.only(
+                                  bottomLeft: Radius.circular(14),
+                                ),
+                              ),
+                              child: ListView.builder(
+                                itemExtent: 58,
+                                itemCount: _units.length,
+                                itemBuilder: (context, index) =>
+                                    _buildUnitSelector(
+                                      _units[index],
+                                      selectedUnitId,
+                                    ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(14),
+                          bottomRight: Radius.circular(14),
+                        ),
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: weekdayHeaderHeight,
+                              child: Row(
+                                children: List.generate(7, (index) {
+                                  final weekday = DateTime(2024, 1, 1 + index);
+                                  final isWeekend =
+                                      weekday.weekday >= DateTime.saturday;
+                                  final label = DateFormat.E(
+                                    'ru',
+                                  ).format(weekday).toUpperCase();
+                                  return Expanded(
+                                    child: Container(
+                                      key: ValueKey(
+                                        'calendar-detail-weekday-${index + 1}',
+                                      ),
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF9FAF8),
+                                        border: const Border(
+                                          top: BorderSide(color: line),
+                                          right: BorderSide(color: line),
+                                          bottom: BorderSide(color: line),
+                                        ),
+                                        borderRadius: index == 6
+                                            ? const BorderRadius.only(
+                                                topRight: Radius.circular(14),
+                                              )
+                                            : null,
+                                      ),
+                                      child: Tooltip(
+                                        message: DateFormat.EEEE(
+                                          'ru',
+                                        ).format(weekday),
+                                        child: Text(
+                                          label,
+                                          maxLines: 1,
+                                          style: TextStyle(
+                                            color: isWeekend
+                                                ? const Color(0xFFB16B5F)
+                                                : mutedInk,
+                                            fontSize: compact ? 12 : 14,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                children: List.generate(6, (weekIndex) {
+                                  final week = dates.sublist(
+                                    weekIndex * 7,
+                                    weekIndex * 7 + 7,
+                                  );
+                                  return Expanded(
+                                    child: _buildDetailWeek(
+                                      week,
+                                      selectedUnit,
+                                      monthStart,
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: Material(
+                    color: Colors.white,
+                    elevation: 5,
+                    shadowColor: const Color(0x26303D32),
+                    borderRadius: BorderRadius.circular(24),
+                    child: InkWell(
+                      key: const ValueKey('calendar-detail-back'),
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: _closeUnitCalendar,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 11,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.arrow_back_rounded,
+                              size: 18,
+                              color: green,
+                            ),
+                            SizedBox(width: 7),
+                            Text(
+                              'Назад',
+                              style: TextStyle(
+                                color: green,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnitSelector(RentalUnit unit, int selectedUnitId) {
+    final selected = unit.id == selectedUnitId;
+    return Material(
+      color: selected ? const Color(0xFFE7F1E9) : Colors.white,
+      child: InkWell(
+        key: ValueKey('calendar-unit-selector-${unit.id}'),
+        onTap: () => _openUnitCalendar(unit.id),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+          alignment: Alignment.centerLeft,
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: line)),
+            boxShadow: selected
+                ? const [BoxShadow(color: Color(0x143E7D4C), blurRadius: 5)]
+                : null,
+          ),
+          child: Text(
+            unit.name,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: selected ? green : ink,
+              fontSize: _unitNameFontSize(
+                unit.name,
+                availableWidth: _activeObjectColumnWidth - 8,
+                availableHeight: 48,
+              ),
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              height: 1.15,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailWeek(
+    List<DateTime> dates,
+    RentalUnit? unit,
+    DateTime monthStart,
+  ) {
+    final weekStart = dates.first;
+    final weekEnd = weekStart.add(const Duration(days: 7));
+    final monthEnd = DateTime.utc(monthStart.year, monthStart.month + 1);
+
+    return LayoutBuilder(
+      key: ValueKey(
+        'calendar-detail-week-${weekStart.year}-${weekStart.month}-${weekStart.day}',
+      ),
+      builder: (context, constraints) {
+        final resolvedCellWidth = constraints.maxWidth / 7;
+        final cells = dates
+            .map((date) {
+              final isToday = sameDay(date, _today());
+              final isWeekend = date.weekday >= DateTime.saturday;
+              final inMonth =
+                  !date.isBefore(monthStart) && date.isBefore(monthEnd);
+              final selection = _selection;
+              final selected =
+                  selection != null &&
+                  unit != null &&
+                  selection.rentalUnitId == unit.id &&
+                  sameDay(selection.date, date);
+              return Expanded(
+                child: Material(
+                  color: selected
+                      ? const Color(0xFFDCEDE0)
+                      : isToday
+                      ? const Color(0xFFEAF3EB)
+                      : isWeekend
+                      ? const Color(0xFFFCFCFB)
+                      : Colors.white,
+                  child: InkWell(
+                    key: ValueKey(
+                      'calendar-detail-day-${date.year}-${date.month}-${date.day}',
+                    ),
+                    onTap: unit == null ? null : () => _tapCell(unit.id, date),
+                    child: Container(
+                      padding: const EdgeInsets.only(left: 4, top: 4),
+                      alignment: Alignment.topLeft,
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          right: BorderSide(color: line),
+                          bottom: BorderSide(color: line),
+                        ),
+                      ),
+                      child: Text(
+                        '${date.day}',
+                        style: TextStyle(
+                          color: !inMonth
+                              ? const Color(0xFFB9C0B9)
+                              : isToday
+                              ? green
+                              : isWeekend
+                              ? const Color(0xFFB16B5F)
+                              : ink,
+                          fontSize: 16,
+                          fontWeight: isToday
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false);
+
+        final bookingCards = unit == null
+            ? const <Widget>[]
+            : _bookings
+                  .where(
+                    (booking) =>
+                        booking.rentalUnitId == unit.id &&
+                        booking.startDate.isBefore(weekEnd) &&
+                        booking.endDate.isAfter(weekStart),
+                  )
+                  .map((booking) {
+                    final start = booking.startDate.isBefore(weekStart)
+                        ? weekStart
+                        : booking.startDate;
+                    final end = booking.endDate.isAfter(weekEnd)
+                        ? weekEnd
+                        : booking.endDate;
+                    final startDay = start.difference(weekStart).inDays;
+                    final endDay = end.difference(weekStart).inDays;
+                    final left = startDay * resolvedCellWidth + 2;
+                    final width = (endDay - startDay) * resolvedCellWidth - 4;
+                    if (width <= 0) return const SizedBox.shrink();
+                    final palette = statusPalette(booking.status);
+                    final compactCard = width < 104;
+                    final name = booking.clientName.isEmpty
+                        ? 'Бронь'
+                        : compactCard
+                        ? booking.clientName.characters.first
+                        : booking.clientName;
+                    return Positioned(
+                      key: ValueKey(
+                        'calendar-detail-booking-${booking.id}-'
+                        '${weekStart.year}-${weekStart.month}-${weekStart.day}',
+                      ),
+                      left: left,
+                      top: 30,
+                      width: width,
+                      height: 38,
+                      child: Material(
+                        color: palette.background,
+                        borderRadius: BorderRadius.circular(9),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(9),
+                          onTap: () => _editBooking(booking),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(9),
+                              border: Border.all(color: palette.border),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x0D1E3223),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.centerLeft,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: palette.foreground,
+                                    fontSize: compactCard ? 9 : 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                if (!compactCard)
+                                  Text(
+                                    '${nightLabel(booking.nights)} · ${booking.guests + booking.children} чел.',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: palette.foreground.withValues(
+                                        alpha: 0.86,
+                                      ),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  })
+                  .toList(growable: false);
+
+        return Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Row(children: cells),
+            ...bookingCards,
+          ],
+        );
+      },
     );
   }
 

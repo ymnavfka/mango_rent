@@ -104,35 +104,39 @@ void main() {
       );
     });
 
-    testWidgets('object column uses 15 percent and shows complete wrapped names', (
-      tester,
-    ) async {
-      const unitName =
-          'Квартира с экстраординарно длинным названием для проверки переноса';
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'object column uses 15 percent and shows complete wrapped names',
+      (tester) async {
+        const unitName =
+            'Квартира с экстраординарно длинным названием для проверки переноса';
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_calendarApp(unitName: unitName));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(_calendarApp(unitName: unitName));
+        await tester.pumpAndSettle();
 
-      final objectColumn = tester.renderObject<RenderBox>(
-        find.byKey(const ValueKey('calendar-object-column')),
-      );
-      expect(objectColumn.size.width, closeTo(390 * 0.15, 0.1));
+        final objectColumn = tester.renderObject<RenderBox>(
+          find.byKey(const ValueKey('calendar-object-column')),
+        );
+        expect(objectColumn.size.width, closeTo(390 * 0.15, 0.1));
 
-      final unitLabel = tester.widget<Text>(find.text(unitName));
-      expect(unitLabel.maxLines, isNull);
-      expect(unitLabel.softWrap, isTrue);
-      expect(unitLabel.overflow, TextOverflow.clip);
-      expect(unitLabel.style?.fontSize, lessThan(11));
-      final labelRect = tester.getRect(find.text(unitName));
-      expect(labelRect.left - objectColumn.localToGlobal(Offset.zero).dx, 3.5);
-      expect(labelRect.width, lessThanOrEqualTo(objectColumn.size.width - 7));
-    });
+        final unitLabel = tester.widget<Text>(find.text(unitName));
+        expect(unitLabel.maxLines, isNull);
+        expect(unitLabel.softWrap, isTrue);
+        expect(unitLabel.overflow, TextOverflow.clip);
+        expect(unitLabel.style?.fontSize, lessThan(11));
+        final labelRect = tester.getRect(find.text(unitName));
+        expect(
+          labelRect.left - objectColumn.localToGlobal(Offset.zero).dx,
+          3.5,
+        );
+        expect(labelRect.width, lessThanOrEqualTo(objectColumn.size.width - 7));
+      },
+    );
 
-    testWidgets('tapping an object name does not open a full-name overlay', (
+    testWidgets('tapping an object name opens its full-screen calendar', (
       tester,
     ) async {
       const unitName =
@@ -146,13 +150,110 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.text(unitName));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('calendar-unit-name-island')),
-        findsNothing,
+        find.byKey(const ValueKey('calendar-detail-view')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('calendar-detail-weekday-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('calendar-detail-weekday-7')),
+        findsOneWidget,
+      );
+      expect(_keyStartingWith('calendar-detail-weekday-'), findsNWidgets(7));
+      expect(_keyStartingWith('calendar-date-header-'), findsNothing);
+      expect(_keyStartingWith('calendar-detail-day-'), findsNWidgets(42));
+      expect(_keyStartingWith('calendar-detail-week-'), findsNWidgets(6));
+      expect(
+        find.byKey(const ValueKey('calendar-detail-back')),
+        findsOneWidget,
       );
       expect(find.text(unitName), findsOneWidget);
+    });
+
+    testWidgets('detail calendar filters bookings and can switch objects', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _calendarApp(
+          units: const [
+            RentalUnit(id: 1, name: 'Квартира'),
+            RentalUnit(id: 2, name: 'Дом'),
+          ],
+          bookings: [
+            _booking(id: 1, rentalUnitId: 1, clientName: 'Анна'),
+            _booking(id: 2, rentalUnitId: 2, clientName: 'Борис'),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      expect(_detailBooking(1), findsOneWidget);
+      expect(_detailBooking(2), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('calendar-unit-selector-2')));
+      await tester.pumpAndSettle();
+
+      expect(_detailBooking(1), findsNothing);
+      expect(_detailBooking(2), findsOneWidget);
+    });
+
+    testWidgets('detail back button returns to the full calendar', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_calendarApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('calendar-detail-back')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('calendar-detail-view')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('calendar-corner-cell')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('system back closes the selected object calendar', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_calendarApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('calendar-detail-view')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('calendar-corner-cell')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('previous and next arrows change the displayed month', (
@@ -183,8 +284,17 @@ void main() {
   });
 }
 
-Widget _calendarApp({String unitName = 'Квартира'}) {
-  final useCases = BookingUseCases(_TestBookingRepository(unitName: unitName));
+Widget _calendarApp({
+  String unitName = 'Квартира',
+  List<RentalUnit>? units,
+  List<Booking> bookings = const [],
+}) {
+  final useCases = BookingUseCases(
+    _TestBookingRepository(
+      units: units ?? [RentalUnit(id: 1, name: unitName)],
+      bookings: bookings,
+    ),
+  );
   return MaterialApp(
     locale: const Locale('ru'),
     supportedLocales: const [Locale('ru')],
@@ -200,25 +310,56 @@ Widget _calendarApp({String unitName = 'Квартира'}) {
   );
 }
 
+Booking _booking({
+  required int id,
+  required int rentalUnitId,
+  required String clientName,
+}) {
+  final now = DateTime.now();
+  final firstDay = DateTime.utc(now.year, now.month);
+  final daysToMonday = (DateTime.monday - firstDay.weekday + 7) % 7;
+  final start = firstDay.add(Duration(days: daysToMonday));
+  return Booking(
+    id: id,
+    rentalUnitId: rentalUnitId,
+    startDate: start,
+    endDate: start.add(const Duration(days: 3)),
+    clientName: clientName,
+  );
+}
+
+Finder _detailBooking(int bookingId) => find.byWidgetPredicate((widget) {
+  final key = widget.key;
+  return key is ValueKey<String> &&
+      key.value.startsWith('calendar-detail-booking-$bookingId-');
+});
+
+Finder _keyStartingWith(String prefix) => find.byWidgetPredicate((widget) {
+  final key = widget.key;
+  return key is ValueKey<String> && key.value.startsWith(prefix);
+});
+
 String _monthLabel(DateTime date) {
   final monthText = DateFormat.yMMMM('ru').format(date);
   return '${monthText[0].toUpperCase()}${monthText.substring(1)}';
 }
 
 class _TestBookingRepository implements BookingRepository {
-  _TestBookingRepository({required this.unitName});
+  _TestBookingRepository({required this.units, required this.bookings});
 
-  final String unitName;
-
-  @override
-  Stream<List<RentalUnit>> watchRentalUnits() =>
-      Stream.value([RentalUnit(id: 1, name: unitName)]);
+  final List<RentalUnit> units;
+  final List<Booking> bookings;
 
   @override
-  Stream<List<Booking>> watchBookings() => Stream.value(const []);
+  Stream<List<RentalUnit>> watchRentalUnits() => Stream.value(units);
 
   @override
-  Future<List<Booking>> getBookingsForUnit(int rentalUnitId) async => const [];
+  Stream<List<Booking>> watchBookings() => Stream.value(bookings);
+
+  @override
+  Future<List<Booking>> getBookingsForUnit(int rentalUnitId) async => bookings
+      .where((booking) => booking.rentalUnitId == rentalUnitId)
+      .toList();
 
   @override
   Future<void> addRentalUnit(String name) async {}

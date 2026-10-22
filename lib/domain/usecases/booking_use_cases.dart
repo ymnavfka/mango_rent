@@ -18,7 +18,9 @@ class BookingUseCases {
   Future<void> addRentalUnit(String name) => _repository.addRentalUnit(name);
 
   Future<Booking> saveBooking(Booking booking) async {
-    if (!booking.endDate.isAfter(booking.startDate)) {
+    final startDate = _dateOnlyUtc(booking.startDate);
+    final endDate = _dateOnlyUtc(booking.endDate);
+    if (!endDate.isAfter(startDate)) {
       throw ArgumentError('Дата выезда должна быть позже даты заезда.');
     }
 
@@ -26,10 +28,13 @@ class BookingUseCases {
       booking.rentalUnitId,
     );
     final hasConflict = existingBookings.any(
-      (existing) =>
-          existing.id != booking.id &&
-          booking.startDate.isBefore(existing.endDate) &&
-          existing.startDate.isBefore(booking.endDate),
+      (existing) {
+        final existingStartDate = _dateOnlyUtc(existing.startDate);
+        final existingEndDate = _dateOnlyUtc(existing.endDate);
+        return existing.id != booking.id &&
+            startDate.isBefore(existingEndDate) &&
+            existingStartDate.isBefore(endDate);
+      },
     );
     if (hasConflict) throw const BookingConflictException();
 
@@ -38,3 +43,6 @@ class BookingUseCases {
 
   Future<void> deleteBooking(int id) => _repository.deleteBooking(id);
 }
+
+DateTime _dateOnlyUtc(DateTime date) =>
+    DateTime.utc(date.year, date.month, date.day);
