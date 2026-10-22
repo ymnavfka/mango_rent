@@ -210,6 +210,70 @@ void main() {
       expect(_detailBooking(2), findsOneWidget);
     });
 
+    testWidgets('booking segments stay square where they cross a week row', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final now = DateTime.now();
+      final monthStart = DateTime.utc(now.year, now.month);
+      final weekStart = monthStart.subtract(
+        Duration(days: monthStart.weekday - DateTime.monday),
+      );
+      final booking = Booking(
+        id: 42,
+        rentalUnitId: 1,
+        startDate: weekStart.add(const Duration(days: 3)),
+        endDate: weekStart.add(const Duration(days: 9)),
+        clientName: 'Переходящая бронь',
+      );
+
+      await tester.pumpWidget(_calendarApp(bookings: [booking]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      final firstSegment = find.byKey(
+        _detailBookingSegmentKey(booking.id!, weekStart),
+      );
+      final secondWeekStart = weekStart.add(const Duration(days: 7));
+      final secondSegment = find.byKey(
+        _detailBookingSegmentKey(booking.id!, secondWeekStart),
+      );
+      expect(_detailBooking(booking.id!), findsNWidgets(2));
+      expect(
+        tester
+            .widget<Material>(
+              find.descendant(
+                of: firstSegment,
+                matching: find.byType(Material),
+              ),
+            )
+            .borderRadius,
+        const BorderRadius.only(
+          topLeft: Radius.circular(9),
+          bottomLeft: Radius.circular(9),
+        ),
+      );
+      expect(
+        tester
+            .widget<Material>(
+              find.descendant(
+                of: secondSegment,
+                matching: find.byType(Material),
+              ),
+            )
+            .borderRadius,
+        const BorderRadius.only(
+          topRight: Radius.circular(9),
+          bottomRight: Radius.circular(9),
+        ),
+      );
+    });
+
     testWidgets('detail back button returns to the full calendar', (
       tester,
     ) async {
@@ -333,6 +397,12 @@ Finder _detailBooking(int bookingId) => find.byWidgetPredicate((widget) {
   return key is ValueKey<String> &&
       key.value.startsWith('calendar-detail-booking-$bookingId-');
 });
+
+ValueKey<String> _detailBookingSegmentKey(int bookingId, DateTime weekStart) =>
+    ValueKey(
+      'calendar-detail-booking-$bookingId-'
+      '${weekStart.year}-${weekStart.month}-${weekStart.day}',
+    );
 
 Finder _keyStartingWith(String prefix) => find.byWidgetPredicate((widget) {
   final key = widget.key;

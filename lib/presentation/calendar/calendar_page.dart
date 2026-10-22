@@ -996,6 +996,27 @@ class _CalendarPageState extends State<CalendarPage> {
                     final left = startDay * resolvedCellWidth + 2;
                     final width = (endDay - startDay) * resolvedCellWidth - 4;
                     if (width <= 0) return const SizedBox.shrink();
+                    final continuesFromPreviousWeek = booking.startDate
+                        .isBefore(weekStart);
+                    final continuesIntoNextWeek = booking.endDate.isAfter(
+                      weekEnd,
+                    );
+                    const outerRadius = Radius.circular(9);
+                    const squareRadius = Radius.zero;
+                    final segmentBorderRadius = BorderRadius.only(
+                      topLeft: continuesFromPreviousWeek
+                          ? squareRadius
+                          : outerRadius,
+                      bottomLeft: continuesFromPreviousWeek
+                          ? squareRadius
+                          : outerRadius,
+                      topRight: continuesIntoNextWeek
+                          ? squareRadius
+                          : outerRadius,
+                      bottomRight: continuesIntoNextWeek
+                          ? squareRadius
+                          : outerRadius,
+                    );
                     final palette = statusPalette(booking.status);
                     final compactCard = width < 104;
                     final name = booking.clientName.isEmpty
@@ -1014,9 +1035,9 @@ class _CalendarPageState extends State<CalendarPage> {
                       height: 38,
                       child: Material(
                         color: palette.background,
-                        borderRadius: BorderRadius.circular(9),
+                        borderRadius: segmentBorderRadius,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(9),
+                          borderRadius: segmentBorderRadius,
                           onTap: () => _editBooking(booking),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -1024,7 +1045,7 @@ class _CalendarPageState extends State<CalendarPage> {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(9),
+                              borderRadius: segmentBorderRadius,
                               border: Border.all(color: palette.border),
                               boxShadow: const [
                                 BoxShadow(
