@@ -21,6 +21,7 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   static const _monthsPerShift = 3;
   static const _edgeBufferDays = 30;
+  static const _detailPagerCenterPage = 10000;
   static const _unitColumnHorizontalPadding = 7.0;
 
   late final ScrollController _leftScrollController;
@@ -31,6 +32,10 @@ class _CalendarPageState extends State<CalendarPage> {
   bool _initialScrollQueued = false;
   bool _rangeAdjustmentPending = false;
   int? _detailRentalUnitId;
+  PageController? _detailPageController;
+  DateTime? _detailPagerBaseMonth;
+  DateTime? _detailVisibleMonth;
+  int _detailCurrentPage = _detailPagerCenterPage;
   double _activeObjectColumnWidth = 32;
   double? _activeDayWidth;
 
@@ -67,6 +72,7 @@ class _CalendarPageState extends State<CalendarPage> {
     _horizontalController
       ..removeListener(_handleTimelineScroll)
       ..dispose();
+    _detailPageController?.dispose();
     super.dispose();
   }
 
@@ -87,27 +93,96 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   void _changeMonth(int offset) {
+    if (_detailRentalUnitId != null) {
+      final controller = _detailPageController;
+      if (controller != null && controller.hasClients) {
+        controller.animateToPage(
+          _detailCurrentPage + offset,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
+        );
+      }
+      return;
+    }
+
     final targetMonth = _cubit.changeMonth(offset);
-    if (_detailRentalUnitId != null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToMonth(targetMonth);
     });
   }
 
   void _goToToday() {
+    if (_detailRentalUnitId != null) {
+      final today = _today();
+      final targetMonth = DateTime.utc(today.year, today.month);
+      final baseMonth = _detailPagerBaseMonth ?? _month;
+      final targetPage =
+          _detailPagerCenterPage + _monthOffset(baseMonth, targetMonth);
+      final controller = _detailPageController;
+      if (controller != null && controller.hasClients) {
+        controller.jumpToPage(targetPage);
+      }
+      setState(() {
+        _detailCurrentPage = targetPage;
+        _detailVisibleMonth = targetMonth;
+      });
+      _cubit.goToToday();
+      return;
+    }
+
     _cubit.goToToday();
-    if (_detailRentalUnitId != null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToToday());
   }
 
   void _openUnitCalendar(int rentalUnitId) {
     _cubit.clearSelection();
+    if (_detailRentalUnitId == null) {
+      _detailPageController?.dispose();
+      _detailPageController = PageController(
+        initialPage: _detailPagerCenterPage,
+      );
+      _detailPagerBaseMonth = _month;
+      _detailVisibleMonth = _month;
+      _detailCurrentPage = _detailPagerCenterPage;
+    }
     setState(() => _detailRentalUnitId = rentalUnitId);
   }
 
   void _closeUnitCalendar() {
     _cubit.clearSelection();
+    _detailPageController?.dispose();
+    _detailPageController = null;
+    _detailPagerBaseMonth = null;
+    _detailVisibleMonth = null;
+    _detailCurrentPage = _detailPagerCenterPage;
     setState(() => _detailRentalUnitId = null);
+  }
+
+  int _monthOffset(DateTime from, DateTime to) =>
+      (to.year - from.year) * 12 + to.month - from.month;
+
+  DateTime _detailMonthForPage(int page) {
+    final baseMonth = _detailPagerBaseMonth ?? _month;
+    return DateTime.utc(
+      baseMonth.year,
+      baseMonth.month + page - _detailPagerCenterPage,
+    );
+  }
+
+  void _handleDetailPageChanged(int page) {
+    final month = _detailMonthForPage(page);
+    _detailCurrentPage = page;
+    if (_detailVisibleMonth?.year == month.year &&
+        _detailVisibleMonth?.month == month.month) {
+      return;
+    }
+    setState(() => _detailVisibleMonth = month);
+  }
+
+  void _commitDetailPage() {
+    final targetMonth = _detailMonthForPage(_detailCurrentPage);
+    final offset = _monthOffset(_month, targetMonth);
+    if (offset != 0) _cubit.changeMonth(offset);
   }
 
   void _scrollToToday() {
@@ -347,8 +422,8 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  Widget _buildMonthHeader(bool compact) {
-    final monthText = DateFormat.yMMMM('ru').format(_month);
+  Widget _buildMonthHeader(bool compact, {DateTime? month}) {
+    final monthText = DateFormat.yMMMM('ru').format(month ?? _month);
     final formattedMonth = monthText.isEmpty
         ? monthText
         : '${monthText[0].toUpperCase()}${monthText.substring(1)}';
@@ -657,14 +732,6 @@ class _CalendarPageState extends State<CalendarPage> {
     final compact = screenWidth < 520;
     final horizontalPadding = compact ? 8.0 : 18.0;
     final leftWidth = _activeObjectColumnWidth;
-    final monthStart = DateTime.utc(_month.year, _month.month);
-    final gridStart = monthStart.subtract(
-      Duration(days: monthStart.weekday - DateTime.monday),
-    );
-    final dates = List.generate(
-      42,
-      (index) => gridStart.add(Duration(days: index)),
-    );
     RentalUnit? selectedUnit;
     for (final unit in _units) {
       if (unit.id == selectedUnitId) {
@@ -678,7 +745,7 @@ class _CalendarPageState extends State<CalendarPage> {
       padding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 8),
       child: Column(
         children: [
-          _buildMonthHeader(compact),
+          _buildMonthHeader(compact, month: _detailVisibleMonth ?? _month),
           Expanded(
             child: Stack(
               children: [
@@ -797,20 +864,26 @@ class _CalendarPageState extends State<CalendarPage> {
                               ),
                             ),
                             Expanded(
-                              child: Column(
-                                children: List.generate(6, (weekIndex) {
-                                  final week = dates.sublist(
-                                    weekIndex * 7,
-                                    weekIndex * 7 + 7,
-                                  );
-                                  return Expanded(
-                                    child: _buildDetailWeek(
-                                      week,
-                                      selectedUnit,
-                                      monthStart,
-                                    ),
-                                  );
-                                }),
+                              child: NotificationListener<ScrollNotification>(
+                                onNotification: (notification) {
+                                  if (notification.depth == 0 &&
+                                      notification is ScrollEndNotification) {
+                                    _commitDetailPage();
+                                  }
+                                  return false;
+                                },
+                                child: PageView.builder(
+                                  key: const ValueKey(
+                                    'calendar-detail-month-pager',
+                                  ),
+                                  controller: _detailPageController,
+                                  onPageChanged: _handleDetailPageChanged,
+                                  itemBuilder: (context, page) =>
+                                      _buildDetailMonthPage(
+                                        _detailMonthForPage(page),
+                                        selectedUnit,
+                                      ),
+                                ),
                               ),
                             ),
                           ],
@@ -863,6 +936,25 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDetailMonthPage(DateTime month, RentalUnit? unit) {
+    final monthStart = DateTime.utc(month.year, month.month);
+    final gridStart = monthStart.subtract(
+      Duration(days: monthStart.weekday - DateTime.monday),
+    );
+    final dates = List.generate(
+      42,
+      (index) => gridStart.add(Duration(days: index)),
+    );
+
+    return Column(
+      key: ValueKey('calendar-detail-month-page-${month.year}-${month.month}'),
+      children: List.generate(6, (weekIndex) {
+        final week = dates.sublist(weekIndex * 7, weekIndex * 7 + 7);
+        return Expanded(child: _buildDetailWeek(week, unit, monthStart));
+      }),
     );
   }
 

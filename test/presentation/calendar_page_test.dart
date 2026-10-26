@@ -210,6 +210,59 @@ void main() {
       expect(_detailBooking(2), findsOneWidget);
     });
 
+    testWidgets('calendar follows a drag and settles on the nearest month', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final currentMonth = DateTime.now();
+      await tester.pumpWidget(_calendarApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      final pager = find.byKey(const ValueKey('calendar-detail-month-pager'));
+      final viewport = tester.getRect(pager);
+      final nextMonth = DateTime(currentMonth.year, currentMonth.month + 1);
+      final drag = await tester.startGesture(viewport.center);
+      await drag.moveBy(const Offset(-20, 0));
+      await drag.moveBy(Offset(-viewport.width * 0.4, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final currentPage = find.byKey(_detailMonthPageKey(currentMonth));
+      final nextPage = find.byKey(_detailMonthPageKey(nextMonth));
+      expect(currentPage, findsOneWidget);
+      expect(nextPage, findsOneWidget);
+      expect(
+        tester.getRect(currentPage).left,
+        closeTo(viewport.left - viewport.width * 0.4, 1),
+      );
+      expect(
+        tester.getRect(nextPage).left,
+        closeTo(viewport.left + viewport.width * 0.6, 1),
+      );
+
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(find.text(_monthLabel(currentMonth)), findsOneWidget);
+
+      final forwardDrag = await tester.startGesture(viewport.center);
+      await forwardDrag.moveBy(const Offset(-20, 0));
+      await forwardDrag.moveBy(Offset(-viewport.width * 0.6, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+      await forwardDrag.up();
+      await tester.pumpAndSettle();
+      expect(find.text(_monthLabel(nextMonth)), findsOneWidget);
+
+      await tester.fling(pager, Offset(viewport.width * 0.8, 0), 1000);
+      await tester.pumpAndSettle();
+
+      expect(find.text(_monthLabel(currentMonth)), findsOneWidget);
+    });
+
     testWidgets('detail bookings occupy half of arrival and checkout days', (
       tester,
     ) async {
@@ -604,6 +657,9 @@ ValueKey<String> _detailBookingSegmentKey(int bookingId, DateTime weekStart) =>
 
 ValueKey<String> _detailDayKey(DateTime date) =>
     ValueKey('calendar-detail-day-${date.year}-${date.month}-${date.day}');
+
+ValueKey<String> _detailMonthPageKey(DateTime month) =>
+    ValueKey('calendar-detail-month-page-${month.year}-${month.month}');
 
 Finder _keyStartingWith(String prefix) => find.byWidgetPredicate((widget) {
   final key = widget.key;
