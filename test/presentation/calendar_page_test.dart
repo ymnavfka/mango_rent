@@ -354,6 +354,72 @@ void main() {
       expect(summaryRect.right, lessThanOrEqualTo(cardRect.right));
     });
 
+    testWidgets('compact table booking shows the full client name', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final today = DateTime.now();
+      final startDate = DateTime.utc(today.year, today.month, today.day);
+      final booking = Booking(
+        id: 46,
+        rentalUnitId: 1,
+        startDate: startDate,
+        endDate: startDate.add(const Duration(days: 1)),
+        clientName: 'Влад',
+      );
+
+      await tester.pumpWidget(_calendarApp(bookings: [booking]));
+      await tester.pumpAndSettle();
+
+      final name = find.text('Влад');
+      expect(name, findsOneWidget);
+      expect(
+        find.ancestor(of: name, matching: find.byType(FittedBox)),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('compact detail booking shows the full client name', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final now = DateTime.now();
+      final monthStart = DateTime.utc(now.year, now.month);
+      final weekStart = monthStart.subtract(
+        Duration(days: monthStart.weekday - DateTime.monday),
+      );
+      final booking = Booking(
+        id: 47,
+        rentalUnitId: 1,
+        startDate: weekStart.add(const Duration(days: 3)),
+        endDate: weekStart.add(const Duration(days: 4)),
+        clientName: 'Влад',
+      );
+
+      await tester.pumpWidget(_calendarApp(bookings: [booking]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      final segment = find.byKey(
+        _detailBookingSegmentKey(booking.id!, weekStart),
+      );
+      final name = find.descendant(of: segment, matching: find.text('Влад'));
+      expect(name, findsOneWidget);
+      expect(
+        find.ancestor(of: name, matching: find.byType(FittedBox)),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('booking ending on a week boundary reaches checkout noon', (
       tester,
     ) async {
@@ -396,9 +462,7 @@ void main() {
       expect(segmentRect.right, closeTo(checkoutCell.center.dx - 2, 0.1));
     });
 
-    testWidgets('split booking hides a partial label when it cannot fit', (
-      tester,
-    ) async {
+    testWidgets('split booking always shows the full name', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -439,7 +503,14 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(of: secondSegment, matching: find.byType(Text)),
+        find.descendant(
+          of: secondSegment,
+          matching: find.text(booking.clientName),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: secondSegment, matching: find.text(summary)),
         findsNothing,
       );
       expect(

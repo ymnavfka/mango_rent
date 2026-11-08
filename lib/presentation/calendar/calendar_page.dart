@@ -1118,8 +1118,6 @@ class _CalendarPageState extends State<CalendarPage> {
                         continuesFromPreviousWeek || continuesIntoNextWeek;
                     final name = booking.clientName.isEmpty
                         ? 'Бронь'
-                        : compactCard && !spansMultipleRows
-                        ? booking.clientName.characters.first
                         : booking.clientName;
                     final summary =
                         '${nightLabel(booking.nights)} · ${booking.guests + booking.children} чел.';
@@ -1140,8 +1138,6 @@ class _CalendarPageState extends State<CalendarPage> {
                         );
                     final showFullBookingLabel =
                         spansMultipleRows && fullLabelFits;
-                    final showClientName =
-                        !spansMultipleRows || showFullBookingLabel;
                     final showSummary = spansMultipleRows
                         ? showFullBookingLabel
                         : true;
@@ -1199,19 +1195,11 @@ class _CalendarPageState extends State<CalendarPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                if (showClientName)
-                                  Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow: spansMultipleRows
-                                        ? TextOverflow.clip
-                                        : TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: palette.foreground,
-                                      fontSize: nameFontSize,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
+                                _bookingNameLabel(
+                                  name,
+                                  color: palette.foreground,
+                                  fontSize: nameFontSize,
+                                ),
                                 if (showSummary)
                                   compactSummary
                                       ? FittedBox(
@@ -1259,6 +1247,26 @@ class _CalendarPageState extends State<CalendarPage> {
     painter.dispose();
     return fits;
   }
+
+  Widget _bookingNameLabel(
+    String name, {
+    required Color color,
+    required double fontSize,
+  }) => FittedBox(
+    alignment: Alignment.centerLeft,
+    fit: BoxFit.scaleDown,
+    child: Text(
+      name,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.clip,
+      style: TextStyle(
+        color: color,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
 
   double _unitNameFontSize(
     String name, {
@@ -1428,9 +1436,7 @@ class _CalendarPageState extends State<CalendarPage> {
           final palette = statusPalette(booking.status);
           final compactCard = width < 38;
           final cardName = booking.clientName.isEmpty
-              ? 'Б'
-              : compactCard
-              ? booking.clientName.characters.first
+              ? 'Бронь'
               : booking.clientName;
           final cardSummary = compactCard
               ? '${booking.nights}н·${booking.guests + booking.children}ч'
@@ -1472,15 +1478,10 @@ class _CalendarPageState extends State<CalendarPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
+                            _bookingNameLabel(
                               cardName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: palette.foreground,
-                                fontSize: compactCard ? 7 : 9,
-                                fontWeight: FontWeight.w800,
-                              ),
+                              color: palette.foreground,
+                              fontSize: compactCard ? 7 : 9,
                             ),
                             Text(
                               cardSummary,
@@ -1498,17 +1499,12 @@ class _CalendarPageState extends State<CalendarPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
+                            _bookingNameLabel(
                               booking.clientName.isEmpty
                                   ? 'Новое бронирование'
                                   : booking.clientName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: palette.foreground,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
+                              color: palette.foreground,
+                              fontSize: 11,
                             ),
                             const SizedBox(height: 3),
                             Text(
