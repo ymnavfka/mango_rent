@@ -306,6 +306,54 @@ void main() {
       expect(segmentRect.right, closeTo(checkoutCell.center.dx - 2, 0.1));
     });
 
+    testWidgets('compact empty booking shows nights and guest count', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final now = DateTime.now();
+      final monthStart = DateTime.utc(now.year, now.month);
+      final weekStart = monthStart.subtract(
+        Duration(days: monthStart.weekday - DateTime.monday),
+      );
+      final booking = Booking(
+        id: 45,
+        rentalUnitId: 1,
+        startDate: weekStart.add(const Duration(days: 3)),
+        endDate: weekStart.add(const Duration(days: 4)),
+      );
+
+      await tester.pumpWidget(_calendarApp(bookings: [booking]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Квартира'));
+      await tester.pumpAndSettle();
+
+      final segment = find.byKey(
+        _detailBookingSegmentKey(booking.id!, weekStart),
+      );
+      expect(
+        find.descendant(of: segment, matching: find.text('Бронь')),
+        findsOneWidget,
+      );
+      final summary = find.descendant(
+        of: segment,
+        matching: find.text('1 ночь · 1 чел.'),
+      );
+      expect(summary, findsOneWidget);
+      expect(
+        find.ancestor(of: summary, matching: find.byType(FittedBox)),
+        findsOneWidget,
+      );
+      final summaryRect = tester.getRect(summary);
+      final cardRect = tester.getRect(
+        find.descendant(of: segment, matching: find.byType(Material)),
+      );
+      expect(summaryRect.right, lessThanOrEqualTo(cardRect.right));
+    });
+
     testWidgets('booking ending on a week boundary reaches checkout noon', (
       tester,
     ) async {

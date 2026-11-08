@@ -1144,12 +1144,25 @@ class _CalendarPageState extends State<CalendarPage> {
                         !spansMultipleRows || showFullBookingLabel;
                     final showSummary = spansMultipleRows
                         ? showFullBookingLabel
-                        : !compactCard;
+                        : true;
+                    final compactSummary = compactCard && !spansMultipleRows;
                     final nameFontSize = spansMultipleRows
                         ? fullNameFontSize
                         : compactCard
                         ? 9.0
                         : fullNameFontSize;
+                    final summaryLabel = Text(
+                      summary,
+                      maxLines: 1,
+                      overflow: spansMultipleRows || compactSummary
+                          ? TextOverflow.clip
+                          : TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.foreground.withValues(alpha: 0.86),
+                        fontSize: summaryFontSize,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    );
                     return Positioned(
                       key: ValueKey(
                         'calendar-detail-booking-${booking.id}-'
@@ -1166,8 +1179,8 @@ class _CalendarPageState extends State<CalendarPage> {
                           borderRadius: segmentBorderRadius,
                           onTap: () => _editBooking(booking),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: compactSummary ? 2 : 5,
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
@@ -1200,20 +1213,13 @@ class _CalendarPageState extends State<CalendarPage> {
                                     ),
                                   ),
                                 if (showSummary)
-                                  Text(
-                                    summary,
-                                    maxLines: 1,
-                                    overflow: spansMultipleRows
-                                        ? TextOverflow.clip
-                                        : TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: palette.foreground.withValues(
-                                        alpha: 0.86,
-                                      ),
-                                      fontSize: summaryFontSize,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                                  compactSummary
+                                      ? FittedBox(
+                                          alignment: Alignment.centerLeft,
+                                          fit: BoxFit.scaleDown,
+                                          child: summaryLabel,
+                                        )
+                                      : summaryLabel,
                               ],
                             ),
                           ),
