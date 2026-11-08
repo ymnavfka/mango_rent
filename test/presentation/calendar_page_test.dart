@@ -25,7 +25,7 @@ void main() {
       await tester.pumpAndSettle();
 
       for (final status in BookingStatus.values) {
-        expect(find.text(status.label), findsNothing);
+        expect(find.text(bookingStatusLabel(status)), findsNothing);
       }
     });
 

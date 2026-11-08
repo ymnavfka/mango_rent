@@ -4,8 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../domain/entities/booking.dart';
 import '../../../domain/entities/rental_unit.dart';
-import '../../../domain/repositories/booking_repository.dart';
+import '../../../domain/errors/booking_exceptions.dart';
 import '../../../domain/usecases/booking_use_cases.dart';
+import '../../../domain/rules/calendar_day.dart';
 
 class CalendarSelection {
   const CalendarSelection(this.rentalUnitId, this.date);
@@ -164,13 +165,16 @@ class CalendarCubit extends Cubit<CalendarState> {
     }
 
     emit(state.copyWith(clearSelection: true));
-    final first = selection.date.isBefore(date) ? selection.date : date;
-    final last = selection.date.isAfter(date) ? selection.date : date;
+    final selectedDate = calendarDay(selection.date);
+    final tappedDate = calendarDay(date);
+    final first = selectedDate.isBefore(tappedDate) ? selectedDate : tappedDate;
+    final last = selectedDate.isAfter(tappedDate) ? selectedDate : tappedDate;
+    final checkout = first == last ? last.add(const Duration(days: 1)) : last;
     final booking = Booking(
       id: null,
       rentalUnitId: rentalUnitId,
       startDate: first,
-      endDate: last.add(const Duration(days: 1)),
+      endDate: checkout,
     );
 
     try {

@@ -224,7 +224,7 @@ class _BookingEditorViewState extends State<_BookingEditorView> {
                               children: [
                                 Container(
                                   key: ValueKey(
-                                    'booking-status-color-${status.storageValue}',
+                                    'booking-status-color-${status.name}',
                                   ),
                                   width: 14,
                                   height: 14,
@@ -236,7 +236,7 @@ class _BookingEditorViewState extends State<_BookingEditorView> {
                                 ),
                                 const SizedBox(width: 10),
                                 Text(
-                                  status.label,
+                                  bookingStatusLabel(status),
                                   style: TextStyle(color: palette.foreground),
                                 ),
                               ],

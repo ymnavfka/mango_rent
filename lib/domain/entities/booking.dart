@@ -1,19 +1,10 @@
+import '../rules/calendar_day.dart';
+
 enum BookingStatus {
-  unpaid('Не оплачено', 'unpaid'),
-  depositPaid('Внесён залог', 'deposit_paid'),
-  paid('Оплачено', 'paid'),
-  closed('Закрыто', 'closed');
-
-  const BookingStatus(this.label, this.storageValue);
-
-  final String label;
-  final String storageValue;
-
-  static BookingStatus fromStorage(String value) =>
-      BookingStatus.values.firstWhere(
-        (status) => status.storageValue == value,
-        orElse: () => BookingStatus.unpaid,
-      );
+  unpaid,
+  depositPaid,
+  paid,
+  closed,
 }
 
 class Booking {
@@ -37,11 +28,8 @@ class Booking {
   final int? id;
   final int rentalUnitId;
 
-  /// Check-in date, inclusive. Dates are normalized to UTC midnight.
-  final DateTime startDate;
-
-  /// Check-out date, exclusive. The number of nights is endDate - startDate.
-  final DateTime endDate;
+  final DateTime startDate; // Check-in; inclusive.
+  final DateTime endDate; // Checkout; exclusive.
 
   final BookingStatus status;
   final String clientName;
@@ -54,7 +42,8 @@ class Booking {
   final String? source;
   final String comment;
 
-  int get nights => endDate.difference(startDate).inDays;
+  int get nights =>
+      calendarDay(endDate).difference(calendarDay(startDate)).inDays;
 
   Booking copyWith({
     int? id,

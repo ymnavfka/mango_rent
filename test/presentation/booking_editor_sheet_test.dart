@@ -82,17 +82,24 @@ void main() {
 
       for (final status in BookingStatus.values) {
         final colorMark = find.byKey(
-          ValueKey('booking-status-color-${status.storageValue}'),
+          ValueKey('booking-status-color-${status.name}'),
         );
-        expect(colorMark, findsWidgets, reason: 'missing ${status.label} color');
+        expect(
+          colorMark,
+          findsWidgets,
+          reason: 'missing ${bookingStatusLabel(status)} color',
+        );
         final marker = tester.widget<Container>(colorMark.first);
         expect(
           (marker.decoration! as BoxDecoration).color,
           statusPalette(status).background,
-          reason: '${status.label} should match its calendar color',
+          reason:
+              '${bookingStatusLabel(status)} should match its calendar color',
         );
 
-        final label = tester.widget<Text>(find.text(status.label).last);
+        final label = tester.widget<Text>(
+          find.text(bookingStatusLabel(status)).last,
+        );
         expect(label.style?.color, statusPalette(status).foreground);
       }
     });

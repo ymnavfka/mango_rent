@@ -42,7 +42,11 @@ void main() {
     expect(cubit.state.booking.clientPhone, '+79990000000');
 
     await _flushMicrotasks();
-    expect(repository.savedBookings, [nameChange, phoneChange]);
+    expect(
+      repository.savedBookings
+          .map((booking) => (booking.clientName, booking.clientPhone)),
+      [('Анна', ''), ('Анна', '+79990000000')],
+    );
     expect(repository.bookings.single.clientPhone, '+79990000000');
   });
 

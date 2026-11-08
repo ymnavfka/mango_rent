@@ -1,11 +1,12 @@
 import '../entities/booking.dart';
 import '../entities/rental_unit.dart';
+import '../errors/booking_exceptions.dart';
 import '../repositories/booking_repository.dart';
+import '../rules/calendar_day.dart';
 
 /// Application actions used by the presentation layer.
 ///
-/// This layer owns booking rules; the repository remains responsible for
-/// reading and writing the SQLite representation.
+/// Coordinates booking rules and persistence through the repository contract.
 class BookingUseCases {
   const BookingUseCases(this._repository);
 
@@ -15,13 +16,17 @@ class BookingUseCases {
 
   Stream<List<Booking>> watchBookings() => _repository.watchBookings();
 
-  Future<void> addRentalUnit(String name) => _repository.addRentalUnit(name);
+  Future<void> addRentalUnit(String name) {
+    final normalizedName = name.trim();
+    if (normalizedName.isEmpty) return Future<void>.value();
+    return _repository.addRentalUnit(normalizedName);
+  }
 
   Future<Booking> saveBooking(Booking booking) async {
-    final startDate = _dateOnlyUtc(booking.startDate);
-    final endDate = _dateOnlyUtc(booking.endDate);
+    final startDate = calendarDay(booking.startDate);
+    final endDate = calendarDay(booking.endDate);
     if (!endDate.isAfter(startDate)) {
-      throw ArgumentError('Дата выезда должна быть позже даты заезда.');
+      throw const InvalidBookingDatesException();
     }
 
     final existingBookings = await _repository.getBookingsForUnit(
@@ -29,8 +34,8 @@ class BookingUseCases {
     );
     final hasConflict = existingBookings.any(
       (existing) {
-        final existingStartDate = _dateOnlyUtc(existing.startDate);
-        final existingEndDate = _dateOnlyUtc(existing.endDate);
+        final existingStartDate = calendarDay(existing.startDate);
+        final existingEndDate = calendarDay(existing.endDate);
         return existing.id != booking.id &&
             startDate.isBefore(existingEndDate) &&
             existingStartDate.isBefore(endDate);
@@ -38,11 +43,10 @@ class BookingUseCases {
     );
     if (hasConflict) throw const BookingConflictException();
 
-    return _repository.saveBooking(booking);
+    return _repository.saveBooking(
+      booking.copyWith(startDate: startDate, endDate: endDate),
+    );
   }
 
   Future<void> deleteBooking(int id) => _repository.deleteBooking(id);
 }
-
-DateTime _dateOnlyUtc(DateTime date) =>
-    DateTime.utc(date.year, date.month, date.day);

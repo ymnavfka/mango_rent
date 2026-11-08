@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mango_rent/domain/entities/booking.dart';
 import 'package:mango_rent/domain/entities/rental_unit.dart';
-import 'package:mango_rent/domain/repositories/booking_repository.dart';
+import 'package:mango_rent/domain/errors/booking_exceptions.dart';
 import 'package:mango_rent/domain/usecases/booking_use_cases.dart';
 
 import '../support/in_memory_booking_repository.dart';
@@ -31,7 +31,7 @@ void main() {
               endDate: checkIn,
             ),
           ),
-          throwsArgumentError,
+          throwsA(isA<InvalidBookingDatesException>()),
         );
         await expectLater(
           useCases.saveBooking(
@@ -42,7 +42,7 @@ void main() {
               endDate: checkIn,
             ),
           ),
-          throwsArgumentError,
+          throwsA(isA<InvalidBookingDatesException>()),
         );
         expect(repository.savedBookings, isEmpty);
         await repository.dispose();
@@ -137,12 +137,46 @@ void main() {
       expect(previousStay.id, isNotNull);
       await repository.dispose();
     });
+
+    test(
+      'counts calendar nights when timestamps are less than 24 hours apart',
+      () {
+        final booking = Booking(
+          id: null,
+          rentalUnitId: 1,
+          startDate: DateTime.utc(2026, 10, 10, 23, 30),
+          endDate: DateTime.utc(2026, 10, 11, 0, 15),
+        );
+
+        expect(booking.nights, 1);
+      },
+    );
+
+    test('saves normalized calendar dates to the repository', () async {
+      final repository = InMemoryBookingRepository();
+      final useCases = BookingUseCases(repository);
+
+      final saved = await useCases.saveBooking(
+        Booking(
+          id: null,
+          rentalUnitId: 1,
+          startDate: DateTime.utc(2026, 10, 10, 23, 30),
+          endDate: DateTime.utc(2026, 10, 11, 0, 15),
+        ),
+      );
+
+      expect(saved.startDate, DateTime.utc(2026, 10, 10));
+      expect(saved.endDate, DateTime.utc(2026, 10, 11));
+      expect(repository.bookings.single.nights, 1);
+      await repository.dispose();
+    });
   });
 
-  test('forwards add and delete operations to the repository', () async {
+  test('normalizes rental-unit names and forwards deletes', () async {
     final repository = InMemoryBookingRepository();
     final useCases = BookingUseCases(repository);
-    await useCases.addRentalUnit('Дом у озера');
+    await useCases.addRentalUnit('  Дом у озера  ');
+    await useCases.addRentalUnit('  ');
     await useCases.deleteBooking(34);
 
     expect(repository.addedUnitNames, ['Дом у озера']);

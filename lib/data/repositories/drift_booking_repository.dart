@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../domain/entities/booking.dart';
 import '../../domain/entities/rental_unit.dart';
 import '../../domain/repositories/booking_repository.dart';
+import '../../domain/rules/calendar_day.dart';
 import '../local/app_database.dart';
 
 class DriftBookingRepository implements BookingRepository {
@@ -42,14 +43,12 @@ class DriftBookingRepository implements BookingRepository {
 
   @override
   Future<void> addRentalUnit(String name) async {
-    final trimmedName = name.trim();
-    if (trimmedName.isEmpty) return;
     final current = await _database.select(_database.rentalUnits).get();
     await _database
         .into(_database.rentalUnits)
         .insert(
           RentalUnitsCompanion.insert(
-            name: trimmedName,
+            name: name,
             sortOrder: Value(current.length),
           ),
         );
@@ -57,28 +56,14 @@ class DriftBookingRepository implements BookingRepository {
 
   @override
   Future<Booking> saveBooking(Booking booking) async {
-    if (!booking.endDate.isAfter(booking.startDate)) {
-      throw ArgumentError('Дата выезда должна быть позже даты заезда.');
-    }
-
-    final sameUnit = await (_database.select(
-      _database.bookings,
-    )..where((row) => row.rentalUnitId.equals(booking.rentalUnitId))).get();
     final start = _encodeDate(booking.startDate);
     final end = _encodeDate(booking.endDate);
-    final hasConflict = sameUnit.any(
-      (existing) =>
-          existing.id != booking.id &&
-          start < existing.endDateMs &&
-          existing.startDateMs < end,
-    );
-    if (hasConflict) throw const BookingConflictException();
 
     final companion = BookingsCompanion(
       rentalUnitId: Value(booking.rentalUnitId),
       startDateMs: Value(start),
       endDateMs: Value(end),
-      status: Value(booking.status.storageValue),
+      status: Value(_encodeStatus(booking.status)),
       clientName: Value(booking.clientName),
       clientPhone: Value(booking.clientPhone),
       amount: Value(booking.amount),
@@ -117,7 +102,7 @@ class DriftBookingRepository implements BookingRepository {
       rentalUnitId: row.rentalUnitId,
       startDate: _decodeDate(row.startDateMs),
       endDate: _decodeDate(row.endDateMs),
-      status: BookingStatus.fromStorage(row.status),
+      status: _decodeStatus(row.status),
       clientName: row.clientName,
       clientPhone: row.clientPhone,
       amount: row.amount,
@@ -131,10 +116,25 @@ class DriftBookingRepository implements BookingRepository {
   }
 
   int _encodeDate(DateTime date) =>
-      DateTime.utc(date.year, date.month, date.day).millisecondsSinceEpoch;
+      calendarDay(date).millisecondsSinceEpoch;
 
   DateTime _decodeDate(int milliseconds) {
     final date = DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
     return DateTime.utc(date.year, date.month, date.day);
   }
+
+  String _encodeStatus(BookingStatus status) => switch (status) {
+    BookingStatus.unpaid => 'unpaid',
+    BookingStatus.depositPaid => 'deposit_paid',
+    BookingStatus.paid => 'paid',
+    BookingStatus.closed => 'closed',
+  };
+
+  BookingStatus _decodeStatus(String value) => switch (value) {
+    'unpaid' => BookingStatus.unpaid,
+    'deposit_paid' => BookingStatus.depositPaid,
+    'paid' => BookingStatus.paid,
+    'closed' => BookingStatus.closed,
+    _ => BookingStatus.unpaid,
+  };
 }

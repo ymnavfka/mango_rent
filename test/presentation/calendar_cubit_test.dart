@@ -104,25 +104,44 @@ void main() {
       expect(cubit.state.rangeStartMonth, DateTime.utc(2029, 10));
     });
 
-    test(
-      'selects two dates in either order and saves the inclusive stay',
-      () async {
-        final first = DateTime.utc(2026, 10, 14);
-        final last = DateTime.utc(2026, 10, 10);
+    test('selects check-in and checkout dates in either order', () async {
+      final first = DateTime.utc(2026, 10, 14);
+      final last = DateTime.utc(2026, 10, 10);
 
-        expect(await cubit.tapCell(1, first), isNull);
-        expect(cubit.state.selection?.date, first);
-        final saved = await cubit.tapCell(1, last);
+      expect(await cubit.tapCell(1, first), isNull);
+      expect(cubit.state.selection?.date, first);
+      final saved = await cubit.tapCell(1, last);
 
-        expect(saved, isNotNull);
-        expect(saved!.startDate, last);
-        expect(saved.endDate, DateTime.utc(2026, 10, 15));
-        expect(saved.nights, 5);
-        expect(saved.id, isNotNull);
-        expect(cubit.state.selection, isNull);
-        expect(repository.savedBookings, hasLength(1));
-      },
-    );
+      expect(saved, isNotNull);
+      expect(saved!.startDate, last);
+      expect(saved.endDate, DateTime.utc(2026, 10, 14));
+      expect(saved.nights, 4);
+      expect(saved.id, isNotNull);
+      expect(cubit.state.selection, isNull);
+      expect(repository.savedBookings, hasLength(1));
+    });
+
+    test('creates one night when checkout is the following day', () async {
+      final checkIn = DateTime.utc(2026, 10, 8);
+      final checkout = checkIn.add(const Duration(days: 1));
+      repository.bookings.add(
+        Booking(
+          id: 10,
+          rentalUnitId: 1,
+          startDate: checkout,
+          endDate: checkout.add(const Duration(days: 2)),
+        ),
+      );
+
+      await cubit.tapCell(1, checkIn);
+      final saved = await cubit.tapCell(1, checkout);
+
+      expect(saved, isNotNull);
+      expect(saved!.startDate, checkIn);
+      expect(saved.endDate, checkout);
+      expect(saved.nights, 1);
+      expect(repository.savedBookings, hasLength(1));
+    });
 
     test(
       'selecting another unit starts a new range and same-day range is one night',

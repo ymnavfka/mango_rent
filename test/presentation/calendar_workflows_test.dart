@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mango_rent/domain/entities/booking.dart';
 import 'package:mango_rent/domain/entities/rental_unit.dart';
 import 'package:mango_rent/domain/usecases/booking_use_cases.dart';
 import 'package:mango_rent/presentation/calendar/calendar_page.dart';
@@ -49,28 +50,34 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      final today = DateTime.now();
+      final start = DateTime.utc(today.year, today.month, today.day + 2);
+      final checkout = start.add(const Duration(days: 1));
       final repository = InMemoryBookingRepository(
         units: const [RentalUnit(id: 1, name: 'Квартира')],
+        bookings: [
+          Booking(
+            id: 5,
+            rentalUnitId: 1,
+            startDate: checkout,
+            endDate: checkout.add(const Duration(days: 2)),
+          ),
+        ],
       );
       addTearDown(repository.dispose);
 
       await tester.pumpWidget(_calendarApp(repository));
       await tester.pumpAndSettle();
 
-      final today = DateTime.now();
-      final start = DateTime.utc(today.year, today.month, today.day + 2);
-      final lastNight = start.add(const Duration(days: 2));
       await _tapCalendarDay(tester, start);
       expect(find.text('Выберите вторую дату в той же строке'), findsOneWidget);
-      await _tapCalendarDay(tester, lastNight);
+      await _tapCalendarDay(tester, checkout);
       await tester.pumpAndSettle();
 
       expect(repository.savedBookings, hasLength(1));
       expect(repository.savedBookings.single.startDate, start);
-      expect(
-        repository.savedBookings.single.endDate,
-        lastNight.add(const Duration(days: 1)),
-      );
+      expect(repository.savedBookings.single.endDate, checkout);
+      expect(repository.savedBookings.single.nights, 1);
       expect(find.text('Бронирование'), findsOneWidget);
       expect(find.text('Квартира'), findsWidgets);
     });

@@ -19,9 +19,11 @@ void main() {
     expect(amountText(1200.5), '1200.5');
   });
 
-  test('provides fallback for unknown stored booking statuses', () {
-    expect(BookingStatus.fromStorage('paid'), BookingStatus.paid);
-    expect(BookingStatus.fromStorage('unrecognized'), BookingStatus.unpaid);
+  test('provides Russian labels for booking statuses', () {
+    expect(bookingStatusLabel(BookingStatus.unpaid), 'Не оплачено');
+    expect(bookingStatusLabel(BookingStatus.depositPaid), 'Внесён залог');
+    expect(bookingStatusLabel(BookingStatus.paid), 'Оплачено');
+    expect(bookingStatusLabel(BookingStatus.closed), 'Закрыто');
   });
 
   test(

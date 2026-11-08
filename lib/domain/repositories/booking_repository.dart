@@ -10,10 +10,3 @@ abstract interface class BookingRepository {
   Future<Booking> saveBooking(Booking booking);
   Future<void> deleteBooking(int id);
 }
-
-class BookingConflictException implements Exception {
-  const BookingConflictException();
-
-  @override
-  String toString() => 'На эти даты уже есть бронирование этого объекта.';
-}

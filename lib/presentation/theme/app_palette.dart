@@ -45,6 +45,13 @@ class StatusPalette {
   final Color border;
 }
 
+String bookingStatusLabel(BookingStatus status) => switch (status) {
+  BookingStatus.unpaid => 'Не оплачено',
+  BookingStatus.depositPaid => 'Внесён залог',
+  BookingStatus.paid => 'Оплачено',
+  BookingStatus.closed => 'Закрыто',
+};
+
 StatusPalette statusPalette(BookingStatus status) {
   return switch (status) {
     BookingStatus.unpaid => const StatusPalette(

@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../domain/entities/booking.dart';
+import '../../../domain/errors/booking_exceptions.dart';
 import '../../../domain/usecases/booking_use_cases.dart';
 
 class BookingEditorState {
@@ -39,7 +40,14 @@ class BookingEditorCubit extends Cubit<BookingEditorState> {
         .then<void>((_) {})
         .catchError((Object error) {
           if (isClosed) return;
-          emit(state.copyWith(notice: 'Не удалось сохранить: $error'));
+          final message = switch (error) {
+            BookingConflictException() =>
+              'На эти даты уже есть бронирование этого объекта.',
+            InvalidBookingDatesException() =>
+              'Дата выезда должна быть позже даты заезда.',
+            _ => 'Не удалось сохранить: $error',
+          };
+          emit(state.copyWith(notice: message));
         });
   }
 

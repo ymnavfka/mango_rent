@@ -1,9 +1,9 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mango_rent/data/local/app_database.dart';
 import 'package:mango_rent/data/repositories/drift_booking_repository.dart';
 import 'package:mango_rent/domain/entities/booking.dart';
-import 'package:mango_rent/domain/repositories/booking_repository.dart';
 
 void main() {
   late AppDatabase database;
@@ -13,7 +13,7 @@ void main() {
   setUp(() async {
     database = AppDatabase.forTesting(NativeDatabase.memory());
     repository = DriftBookingRepository(database);
-    await repository.addRentalUnit('  Квартира у моря  ');
+    await repository.addRentalUnit('Квартира у моря');
     await repository.addRentalUnit('Дом');
     unitId = (await repository.watchRentalUnits().first).first.id;
   });
@@ -21,12 +21,16 @@ void main() {
   tearDown(() => database.close());
 
   test(
-    'trims object names, ignores blanks, and preserves their order',
+    'persists object names and preserves their order',
     () async {
-      await repository.addRentalUnit('   ');
+      await repository.addRentalUnit('Гараж');
       final units = await repository.watchRentalUnits().first;
 
-      expect(units.map((unit) => unit.name), ['Квартира у моря', 'Дом']);
+      expect(units.map((unit) => unit.name), [
+        'Квартира у моря',
+        'Дом',
+        'Гараж',
+      ]);
     },
   );
 
@@ -71,58 +75,61 @@ void main() {
     },
   );
 
-  test(
-    'rejects overlap on one unit but accepts adjacent dates and other units',
-    () async {
-      final firstStart = DateTime.utc(2026, 10, 10);
-      final first = await repository.saveBooking(
-        Booking(
-          id: null,
-          rentalUnitId: unitId,
-          startDate: firstStart,
-          endDate: firstStart.add(const Duration(days: 3)),
-        ),
-      );
-
-      await expectLater(
-        repository.saveBooking(
-          Booking(
-            id: null,
+  test('maps unknown stored statuses to unpaid', () async {
+    await database
+        .into(database.bookings)
+        .insert(
+          BookingsCompanion.insert(
             rentalUnitId: unitId,
-            startDate: firstStart.add(const Duration(days: 2)),
-            endDate: firstStart.add(const Duration(days: 4)),
+            startDateMs: DateTime.utc(2026, 10, 10).millisecondsSinceEpoch,
+            endDateMs: DateTime.utc(2026, 10, 11).millisecondsSinceEpoch,
+            status: const Value('unrecognized'),
           ),
-        ),
-        throwsA(isA<BookingConflictException>()),
-      );
+        );
 
-      final adjacent = await repository.saveBooking(
-        Booking(
-          id: null,
-          rentalUnitId: unitId,
-          startDate: first.endDate,
-          endDate: first.endDate.add(const Duration(days: 1)),
-        ),
-      );
-      final otherUnitId = (await repository.watchRentalUnits().first).last.id;
-      final otherUnit = await repository.saveBooking(
-        Booking(
-          id: null,
-          rentalUnitId: otherUnitId,
-          startDate: firstStart.add(const Duration(days: 1)),
-          endDate: firstStart.add(const Duration(days: 2)),
-        ),
-      );
+    expect(
+      (await repository.watchBookings().first).single.status,
+      BookingStatus.unpaid,
+    );
+  });
 
-      expect(adjacent.id, isNotNull);
-      expect(otherUnit.id, isNotNull);
-      expect(await repository.getBookingsForUnit(unitId), hasLength(2));
-      expect(await repository.getBookingsForUnit(otherUnitId), hasLength(1));
-    },
-  );
+  test('persists adjacent stays and stays for other units', () async {
+    final firstStart = DateTime.utc(2026, 10, 10);
+    final first = await repository.saveBooking(
+      Booking(
+        id: null,
+        rentalUnitId: unitId,
+        startDate: firstStart,
+        endDate: firstStart.add(const Duration(days: 3)),
+      ),
+    );
+
+    final adjacent = await repository.saveBooking(
+      Booking(
+        id: null,
+        rentalUnitId: unitId,
+        startDate: first.endDate,
+        endDate: first.endDate.add(const Duration(days: 1)),
+      ),
+    );
+    final otherUnitId = (await repository.watchRentalUnits().first).last.id;
+    final otherUnit = await repository.saveBooking(
+      Booking(
+        id: null,
+        rentalUnitId: otherUnitId,
+        startDate: firstStart.add(const Duration(days: 1)),
+        endDate: firstStart.add(const Duration(days: 2)),
+      ),
+    );
+
+    expect(adjacent.id, isNotNull);
+    expect(otherUnit.id, isNotNull);
+    expect(await repository.getBookingsForUnit(unitId), hasLength(2));
+    expect(await repository.getBookingsForUnit(otherUnitId), hasLength(1));
+  });
 
   test(
-    'updates a booking without treating its current dates as a conflict',
+    'updates an existing booking record',
     () async {
       final start = DateTime.utc(2026, 11, 1);
       final created = await repository.saveBooking(
